@@ -1,0 +1,8 @@
+target
+firedbg
+Cargo.lock
+*.sublime*
+.vscode
+wip/
+.idea/*
+.DS_Store
