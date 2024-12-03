@@ -21,14 +21,15 @@ use crate::expr::{HasConditions, HasLetConditions, HasParams, HasRelations, HasV
 use crate::func::{Callable, CanCallFunctions, CountFunction};
 use crate::graph::Relation;
 use crate::query_result::{FromTarget, QueryResult};
-use crate::types::{OrderBy, RangeTarget, TableType};
+use crate::types::{OrderBy, RangeTarget, RecordType, SurrealId, TableType};
 use crate::vector_search::{VectorCondition, VectorSearch};
 use crate::SurrealDB;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct SelectStatement<T> {
-    pub(crate) targets: Option<Vec<FromTarget>>,
+pub struct SelectStatement<T> where T:RecordType{
+    pub(crate) targets: Option<Vec<FromTarget<T>>>,
     pub(crate) select_value: bool,
+    pub(crate) with_id: Option<SurrealId<T>>,
     pub(crate) only: bool,
     pub(crate) selected_fields: Option<Vec<QueryResult>>,
     pub(crate) omitted_fields: Option<Vec<String>>,
@@ -56,7 +57,7 @@ pub struct SelectStatement<T> {
 // Base implementation for all states
 impl<T> SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     /// Select specific fields, optionally with aliases
     #[instrument(skip(self))]
@@ -66,6 +67,10 @@ where
             expr: expr.to_string(),
             alias: alias.map(String::from),
         });
+        self
+    }
+    pub fn where_id(mut self, id: SurrealId<T>) -> Self {
+        self.with_id = Some(id);
         self
     }
 
@@ -103,7 +108,7 @@ where
         alias: Option<&str>,
     ) -> Result<Self>
     where
-        U: TableType + Serialize + DeserializeOwned,
+        U: RecordType
     {
         let fields = self.selected_fields.get_or_insert_with(Vec::new);
         fields.push(QueryResult::Subquery {
@@ -364,7 +369,7 @@ where
 }
 impl<T> HasVectorConditions for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn get_vector_conditions(&self) -> &Vec<VectorCondition> {
         &self.vector_conditions
@@ -377,7 +382,7 @@ where
 
 impl<T> HasParams for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn params(&self) -> &Vec<(String, Value)> {
         &self.parameters
@@ -390,7 +395,7 @@ where
 
 impl<T> HasConditions for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
         &mut self.conditions
@@ -398,7 +403,7 @@ where
 }
 impl<T> HasRelations for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn relations(&self) -> &Vec<Relation> {
         &self.relations
@@ -410,7 +415,7 @@ where
 }
 impl<T> CanCallFunctions for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     /// Call a standard function
     fn call_function<F: Callable>(mut self, func: F) -> Self {
@@ -423,7 +428,7 @@ where
 
 impl<T> Indexable for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn with_index(&self) -> &Option<Vec<String>> {
         &self.with_index
@@ -436,7 +441,7 @@ where
 
 impl<T> HasLetConditions for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn get_lets(&self) -> &Vec<(String, String)> {
         &self.let_statements
@@ -450,7 +455,7 @@ where
 #[async_trait]
 impl<T> QueryBuilder<T> for SelectStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn new() -> Self {
         Self {
@@ -477,7 +482,8 @@ where
             explain: None,
             version: None,
             let_statements: vec![],
-            phantom_data: PhantomData
+            phantom_data: PhantomData,
+            with_id: None,
         }
     }
 
@@ -524,7 +530,11 @@ where
                 bail!("When using .only(), a LIMIT 1 must be specified.");
             }
             query.push_str("ONLY ");
-            query.push_str(T::table_name())
+            if let Some(id) = &self.with_id {
+                query.push_str(id.to_string().as_str());
+            } else {
+                query.push_str(T::table_name());
+            }
         } else if let Some(targets) = &self.targets {
             if !targets.is_empty() {
                 for v in targets {
@@ -533,7 +543,11 @@ where
                 query = query.trim_end_matches(',').parse()?;
             }
         } else {
-            query.push_str(T::table_name())
+            if let Some(id) = &self.with_id {
+                query.push_str(id.to_string().as_str());
+            } else {
+                query.push_str(T::table_name());
+            }
         }
 
         // Add relations if present

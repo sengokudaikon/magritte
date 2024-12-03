@@ -1,5 +1,5 @@
 use super::attributes::{split_generics, Edge};
-use crate::derives::{conversion, expand_derive_column};
+use crate::derives::{conversion, expand_derive_column, expr_array_to_vec};
 use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -39,11 +39,13 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
     let schema_type = attrs.schema.unwrap_or("SCHEMAFULL".to_string());
 
-    let permissions = attrs
-        .permissions
-        .as_ref()
-        .map(|expr_array| conversion::expr_array_to_vec(expr_array))
-        .unwrap_or_else(|| quote!(vec![]));
+    let permissions = match attrs.permissions.as_ref() {
+        None => quote!(None), //None,
+        Some(elems) => {
+            let perms = expr_array_to_vec(elems);
+            quote!(#perms)
+        }
+    };
 
     let overwrite = attrs.overwrite;
     let if_not_exists = attrs.if_not_exists;
@@ -52,20 +54,11 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
     // Generate column enum and its implementations
     let column_impl = expand_derive_column(input.clone())?;
-
-    Ok(quote! {
-        #column_impl
-
-        #[automatically_derived]
-        impl #impl_generics EdgeTrait for #ident #type_generics #where_clause {
-            type EntityFrom = #from_type;
-            type EntityTo = #to_type;
-
-            fn def(&self) -> EdgeDef {
-                EdgeDef::new(
+    let def = quote! {
+        EdgeDef::new(
                     #edge_name_lit.to_string(),
-                    #from_type::table_name().to_string(),
-                    #to_type::table_name().to_string(),
+                    <Self::EntityFrom as magritte::prelude::NamedType>::table_name(),
+                    <Self::EntityTo as magritte::prelude::NamedType>::table_name(),
                     #schema_type,
                     #permissions,
                     #overwrite,
@@ -73,24 +66,40 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
                     #drop,
                     #enforced
                 )
+    };
+    Ok(quote! {
+        #column_impl
+
+        #[automatically_derived]
+
+        impl #impl_generics magritte::prelude::EdgeTrait for #ident #type_generics #where_clause {
+            type EntityFrom = #from_type;
+            type EntityTo = #to_type;
+
+            fn def(&self) -> EdgeDef {
+                #def
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics NamedType for #ident #type_generics #where_clause {
+        impl #impl_generics magritte::prelude::RecordType for #ident #type_generics #where_clause {}
+
+        #[automatically_derived]
+        impl #impl_generics magritte::prelude::NamedType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
                 #edge_name_lit
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics EdgeType for #ident #type_generics #where_clause {
+
+        impl #impl_generics magritte::prelude::EdgeType for #ident #type_generics #where_clause {
             fn edge_from(&self) -> &str {
-                #from_type::table_name()
+                <#from_type as magritte::prelude::NamedType>::table_name()
             }
 
             fn edge_to(&self) -> &str {
-                #to_type::table_name()
+                <#to_type as magritte::prelude::NamedType>::table_name()
             }
 
             fn is_enforced(&self) -> bool {
@@ -99,7 +108,7 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
         }
 
         #[automatically_derived]
-        impl #impl_generics AsRef<str> for #ident #type_generics #where_clause {
+        impl #impl_generics core::convert::AsRef<str> for #ident #type_generics #where_clause {
             fn as_ref(&self) -> &str {
                 #edge_name_lit
             }

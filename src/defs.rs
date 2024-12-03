@@ -1,6 +1,5 @@
 // public rexports of Def types
 pub use super::entity::table::TableDef;
-pub use super::entity::table::RecordRef;
 pub use super::entity::event::EventDef;
 pub use super::entity::index::IndexDef;
 pub use super::entity::relation::RelationDef;

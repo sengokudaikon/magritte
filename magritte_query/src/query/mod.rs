@@ -13,7 +13,7 @@ use surrealdb::Surreal;
 use crate::query::alter::AlterStatement;
 use crate::query::create::CreateStatement;
 use crate::query::delete::DeleteStatement;
-use crate::types::TableType;
+use crate::types::{RecordType, TableType};
 
 pub mod info;
 pub mod insert;
@@ -32,7 +32,7 @@ pub struct Query<T> {
 
 /// All available types of Table query
 #[derive(Debug, Clone)]
-pub enum QueryStatement<T> {
+pub enum QueryStatement<T> where T:RecordType {
     Select(SelectStatement<T>),
     Create(CreateStatement<T>),
     Alter(AlterStatement),
@@ -45,7 +45,7 @@ pub enum QueryStatement<T> {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SubQueryStatement<T> {
+pub enum SubQueryStatement<T> where T:RecordType {
     SelectStatement(SelectStatement<T>),
     InsertStatement(InsertStatement<T>),
     UpdateStatement(UpdateStatement<T>),
@@ -56,7 +56,7 @@ pub enum SubQueryStatement<T> {
 
 impl <T>Query<T>
 where
-    T: TableType + Serialize + DeserializeOwned
+    T: RecordType
 {
     /// CREATE statement [`CreateStatement`]
     pub fn create() -> CreateStatement<T> {

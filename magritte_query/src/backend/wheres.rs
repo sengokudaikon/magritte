@@ -2,29 +2,25 @@ use crate::backend::value::SqlValue;
 use crate::backend::QueryBuilder;
 use crate::conditions::Operator;
 use crate::expr::{HasConditions, HasParams};
-use crate::types::TableType;
+use crate::types::{SurrealId, TableType};
 use crate::Callable;
 use anyhow::anyhow;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tracing::instrument;
 
-pub trait WhereClause {
+pub trait WhereClause: Sized {
     fn where_op<V: Serialize>(
         self,
         field: &str,
         op: Operator,
         value: Option<V>,
     ) -> anyhow::Result<Self>
-    where
-        Self: Sized;
+    ;
     fn where_in<U, QB: QueryBuilder<U>>(self, field: &str, subquery: QB) -> anyhow::Result<Self>
     where
-        Self: Sized,
-        U: TableType + Serialize + DeserializeOwned,;
-    fn where_function<F: Callable>(self, func: F) -> anyhow::Result<Self>
-    where
-        Self: Sized;
+        U: TableType + Serialize + DeserializeOwned;
+    fn where_function<F: Callable>(self, func: F) -> anyhow::Result<Self>;
 }
 
 impl<T: HasConditions + HasParams> WhereClause for T {

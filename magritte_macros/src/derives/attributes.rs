@@ -11,8 +11,8 @@ pub struct AsSelect {
     pub select: Option<Expr>,
     #[deluxe(default)]
     pub from: Option<Expr>,
-    #[deluxe(default)]
-    pub where_clause: Option<Expr>,
+    #[deluxe(rename = where, default)]
+    pub where_: Option<Expr>,
     #[deluxe(default)]
     pub group_by: Option<String>,
 }
@@ -22,14 +22,14 @@ impl ToTokens for AsSelect {
         let AsSelect {
             select,
             from,
-            where_clause,
+            where_,
             group_by,
         } = self;
         let expanded = quote! {
             AsSelect {
                 select: #select,
                 from: #from,
-                where_clause: #where_clause,
+                where_: #where_,
                 group_by: #group_by,
             }
         };
@@ -41,11 +41,13 @@ impl Display for AsSelect {
         let mut query = String::new();
         if let Some(select) = &self.select {
             query.push_str(&format!("{}", quote!(#select)));
+        } else {
+            query.push_str("*");
         }
         if let Some(from) = &self.from {
             query.push_str(&format!(" FROM {}", quote!(#from)));
         }
-        if let Some(where_clause) = &self.where_clause {
+        if let Some(where_clause) = &self.where_ {
             query.push_str(&format!(" WHERE {}", quote!(#where_clause)));
         }
         if let Some(group_by) = &self.group_by {
@@ -115,8 +117,10 @@ impl ToTokens for Table {
 #[deluxe(attributes(column))]
 pub struct Column {
     #[deluxe(default)]
-    pub name: Option<String>,
+    pub ignore: bool,
     #[deluxe(default)]
+    pub name: Option<String>,
+    #[deluxe(rename = type)]
     pub type_name: Option<String>,
     #[deluxe(default)]
     pub nullable: bool,
@@ -139,6 +143,7 @@ pub struct Column {
 impl ToTokens for Column {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Column {
+            ignore,
             name,
             type_name,
             nullable,
@@ -152,6 +157,7 @@ impl ToTokens for Column {
         } = self;
         let expanded = quote! {
             Column {
+                ignore: #ignore,
                 name: #name,
                 type_name: #type_name,
                 nullable: #nullable,
@@ -173,9 +179,8 @@ impl ToTokens for Column {
 pub struct Event {
     #[deluxe(default)]
     pub name: Option<String>,
-    #[deluxe(default)]
+    pub table: Option<String>,
     pub when: Option<Expr>,
-    #[deluxe(default)]
     pub then: Option<Expr>,
     #[deluxe(default)]
     pub overwrite: bool,
@@ -189,6 +194,7 @@ impl ToTokens for Event {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Event {
             name,
+            table,
             when,
             then,
             overwrite,
@@ -198,6 +204,7 @@ impl ToTokens for Event {
         let expanded = quote! {
             Event {
                 name: #name,
+                table: #table,
                 when: #when,
                 then: #then,
                 overwrite: #overwrite,
@@ -415,6 +422,8 @@ pub struct Index {
     #[deluxe(default)]
     pub name: Option<String>,
     #[deluxe(default)]
+    pub table: Option<String>,
+    #[deluxe(default)]
     pub overwrite: bool,
     #[deluxe(default)]
     pub if_not_exists: bool,
@@ -442,6 +451,7 @@ impl ToTokens for Index {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Index {
             name,
+            table,
             overwrite,
             if_not_exists,
             fields,
@@ -457,6 +467,7 @@ impl ToTokens for Index {
         let expanded = quote! {
             Index {
                 name: #name,
+                table: #table,
                 overwrite: #overwrite,
                 if_not_exists: #if_not_exists,
                 fields: #fields,
@@ -536,13 +547,15 @@ impl ToTokens for Edge {
 #[deluxe(attributes(relate))]
 pub struct Relate {
     #[deluxe(default)]
+    pub from: Option<String>,
+    #[deluxe(default)]
     pub in_id: Option<String>,
     #[deluxe(default)]
-    pub to: Option<Path>,
+    pub to: Option<String>,
     #[deluxe(default)]
     pub out_id: Option<String>,
     #[deluxe(default)]
-    pub edge: Option<Path>,
+    pub edge: Option<String>,
     #[deluxe(default)]
     pub content: Option<Expr>,
 }
@@ -550,6 +563,7 @@ pub struct Relate {
 impl ToTokens for Relate {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Relate {
+            from,
             in_id,
             to,
             out_id,
@@ -558,6 +572,7 @@ impl ToTokens for Relate {
         } = self;
         let expanded = quote! {
             Relate {
+                from: #from
                 in_id: #in_id,
                 to: #to,
                 out_id: #out_id,
@@ -596,15 +611,11 @@ impl HasTableName for Table {
     }
 }
 
-#[derive(Default, ExtractAttributes)]
-#[deluxe(attributes(entity))]
-pub struct Entity {
-    #[deluxe(default)]
-    pub column: Option<syn::Ident>,
-    #[deluxe(default)]
-    pub event: Option<syn::Ident>,
-    #[deluxe(default)]
-    pub index: Option<syn::Ident>,
-    #[deluxe(default)]
-    pub relation: Option<syn::Ident>,
+pub fn resolve_parent_table_name(event_enum_ident: &syn::Ident) -> String {
+    let name = event_enum_ident.to_string();
+    if name.ends_with("Events") {
+        name[..name.len() - 6].to_string()
+    } else {
+        name
+    }
 }

@@ -1,11 +1,15 @@
 use crate::backend::QueryBuilder;
 use crate::query_result::{FromTarget, QueryResult};
+use crate::types::{RecordType, SurrealId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-pub trait FromClause {
+pub trait FromClause<T>
+where
+    T: RecordType,
+{
     /// Add additional tables to query from
-    fn from_targets_mut(&mut self) -> &mut Vec<FromTarget>;
+    fn from_targets_mut(&mut self) -> &mut Vec<FromTarget<T>>;
     fn from_tables(mut self, tables: Vec<&str>) -> Self
     where
         Self: Sized,
@@ -14,35 +18,27 @@ pub trait FromClause {
             .extend(tables.into_iter().map(|t| FromTarget::Table(t.to_string())));
         self
     }
-
-    /// Add specific records to query from
-    fn from_records(mut self, records: Vec<(&str, &str)>) -> Self
+    fn from_record(mut self, target: SurrealId<T>) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        self.from_targets_mut().extend(
-            records
-                .into_iter()
-                .map(|(table, id)| FromTarget::Record(table.to_string(), id.to_string())),
-        );
-        self
+        self.from_targets_mut().push(FromTarget::Record(target));
+        Ok(self)
     }
 
     /// Add a list of record IDs to query from
-    fn from_record_list(mut self, records: Vec<&str>) -> Self
+    fn from_records(mut self, targets: Vec<SurrealId<T>>) -> anyhow::Result<Self>
     where
         Self: Sized,
     {
-        self.from_targets_mut().push(FromTarget::RecordList(
-            records.into_iter().map(String::from).collect(),
-        ));
-        self
+        let targets = vec![FromTarget::RecordList(targets)];
+        self.from_targets_mut().extend(targets);
+        Ok(self)
     }
 
     /// Add a FROM target that is a subquery
-    fn from_subquery<U, QB: QueryBuilder<U>>(mut self, subquery: QB) -> anyhow::Result<Self>
+    fn from_subquery<QB: QueryBuilder<T>>(mut self, subquery: QB) -> anyhow::Result<Self>
     where
-        U: Clone + Send + Sync + 'static + Serialize + DeserializeOwned,
         Self: Sized,
     {
         self.from_targets_mut()

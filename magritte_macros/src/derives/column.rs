@@ -7,7 +7,8 @@ use deluxe::ExtractAttributes;
 use heck::{ToPascalCase, ToSnakeCase};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput, Field, Fields};
+use serde_json::map;
+use syn::{Data, DeriveInput, ExprArray, Field, Fields, parse_quote};
 
 fn extract_field_type(field: &Field) -> String {
     type_to_surrealdb_type(&field.ty)
@@ -19,6 +20,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     // Get the actual table name that will be used
     let attrs = Table::extract_attributes(&mut input.attrs)?;
     let entity_name = &input.ident;
+    
     let table_name = resolve_table_name(&attrs, entity_name);
     let table_name_str = &*table_name;
     let column_enum_name = format_ident!("{}Columns", entity_name);
@@ -59,7 +61,9 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             let mut field_attrs_clone = field.attrs.clone();
             Column::extract_attributes(&mut field_attrs_clone)?
         };
-
+        if field_attrs.ignore {
+            continue;
+        }
         let column_name = field_attrs
             .name
             .clone()
@@ -69,12 +73,13 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         // Use our new type inference
         let field_type = extract_field_type(field);
         let type_name = field_attrs.type_name.clone().unwrap_or_else(|| field_type);
-
-        let permissions = field_attrs
-            .permissions
-            .as_ref()
-            .map(|expr_array| expr_array_to_vec(expr_array))
-            .unwrap_or_else(|| quote!(vec![]));
+        let permissions = match field_attrs.permissions.as_ref() {
+            None => quote!(None), //None,
+            Some(elems) => {
+                let perms = expr_array_to_vec(elems);
+                quote!(#perms)
+            }
+        };
 
         // Determine nullability based on field type if not explicitly set
         let is_nullable = field_attrs.nullable;
@@ -89,6 +94,10 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             .map(|expr| quote!(#expr));
         let comment = field_attrs
             .comment
+            .as_ref()
+            .map(|expr| quote!(#expr));
+        let value = field_attrs
+            .value
             .as_ref()
             .map(|expr| quote!(#expr));
         let readonly = field_attrs.readonly;
@@ -109,6 +118,11 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             None => quote!(None),
         };
 
+        let value_value = match value {
+            Some(v) => quote!(Some(#v.to_string())),
+            None => quote!(None),
+        };
+
         let def = quote! {
             #column_enum_name::#variant_name => ColumnDef::new(
                 #column_name,
@@ -117,6 +131,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
                 #default_value,
                 #assert_value,
                 #permissions,
+                #value_value,
                 #is_nullable,
                 #readonly,
                 #flexible,
@@ -132,19 +147,21 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
 
     let err_type = quote!(magritte::prelude::ColumnFromStrErr);
 
+    let entity_type: syn::Type = parse_quote!(#entity_name);
+
     Ok(quote! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, serde::Serialize, serde::Deserialize)]
         pub enum #column_enum_name #type_generics #where_clause {
             #(#column_variants),*,
             #[doc(hidden)]
-            __Phantom(::std::marker::PhantomData<#entity_name #type_generics>)
+            __Phantom(::std::marker::PhantomData<#entity_type>)
         }
 
         #[automatically_derived]
-        impl #impl_generics ColumnTrait for #column_enum_name #type_generics #where_clause {
-            type EntityName = #entity_name #type_generics;
+        impl #impl_generics magritte::prelude::ColumnTrait for #column_enum_name #type_generics #where_clause {
+            type EntityName = #entity_type;
 
-            fn def(&self) -> ColumnDef {
+            fn def(&self) -> magritte::prelude::ColumnDef {
                 match self {
                     #(#column_defs,)*
                     #column_enum_name::__Phantom(_) => unreachable!()
@@ -152,7 +169,13 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             }
         }
 
-        impl #impl_generics ColumnType for #column_enum_name #type_generics #where_clause {
+        #[automatically_derived]
+        impl #impl_generics magritte::prelude::ColumnTypeLite for #column_enum_name #type_generics #where_clause {
+
+        }
+
+        #[automatically_derived]
+        impl #impl_generics magritte::prelude::ColumnType for #column_enum_name #type_generics #where_clause {
             fn column_name(&self) -> & str {
                 match self {
                     #(#column_enum_name::#column_variants => #column_names,)*
@@ -162,6 +185,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
 
             fn table_name() -> &'static str {
                 #table_name_str
+
             }
 
             fn column_type(&self) -> & str {
@@ -183,6 +207,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
                 }
             }
         }
+
         #[automatically_derived]
         impl #impl_generics std::fmt::Display for #column_enum_name #type_generics #where_clause {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -192,8 +217,9 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
                 }
             }
         }
+
         #[automatically_derived]
-        impl #impl_generics AsRef<str> for #column_enum_name #type_generics #where_clause {
+        impl #impl_generics core::convert::AsRef<str> for #column_enum_name #type_generics #where_clause {
             fn as_ref(&self) -> &str {
                 match self {
                     #(#column_enum_name::#column_variants => #column_names,)*
@@ -203,3 +229,4 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         }
     })
 }
+

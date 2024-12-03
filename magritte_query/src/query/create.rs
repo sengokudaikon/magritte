@@ -2,6 +2,7 @@
 //!
 //! This module contains operations related to creating new records in tables.
 
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,7 +18,7 @@ use tracing::{error, info, instrument};
 use crate::backend::QueryBuilder;
 use crate::query_result::FromTarget;
 use crate::returns::Returns;
-use crate::types::{RangeTarget, ReturnType, TableType};
+use crate::types::{NamedType, RangeTarget, RecordType, ReturnType, SurrealId, TableType};
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -29,10 +30,13 @@ pub enum Content {
 
 /// CREATE query builder with allowed method chains
 #[derive(Clone, Debug)]
-pub struct CreateStatement<T> {
+pub struct CreateStatement<T>
+where
+    T: RecordType
+{
     pub(crate) with_id: Option<String>,
     pub(crate) with_range: Option<RangeTarget>,
-    pub(crate) targets: Option<Vec<FromTarget>>,
+    pub(crate) targets: Option<Vec<FromTarget<T>>>,
     pub(crate) only: bool,
     pub(crate) content: Option<Content>,
     pub(crate) parameters: Vec<(String, serde_json::Value)>,
@@ -40,31 +44,15 @@ pub struct CreateStatement<T> {
     pub(crate) timeout: Option<Duration>,
     pub(crate) return_type: Option<ReturnType>,
     pub(crate) version: Option<String>,
-    phantom_data: PhantomData<T>
+    phantom_data: PhantomData<T>,
 }
 impl<T> CreateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     pub fn with_id(mut self, id: &str) -> Self {
         self.with_id = Some(id.to_string());
         self
-    }
-
-    pub fn targets<R>(mut self, targets: Vec<Box<R>>) -> Result<Self>
-    where
-        R: TableType + Serialize + DeserializeOwned,
-    {
-        if self.only {
-            Ok(self)
-        } else {
-            let targets: Vec<FromTarget> = targets
-                .into_iter()
-                .map(|_| FromTarget::Table(R::table_name().parse().unwrap()))
-                .collect();
-            self.targets = Some(targets);
-            Ok(self)
-        }
     }
 
     pub fn range(mut self, range_target: RangeTarget) -> Self {
@@ -72,11 +60,11 @@ where
         self
     }
 
-    pub fn targets_list(mut self, targets: Vec<String>) -> Result<Self> {
+    pub fn targets(mut self, targets: Vec<SurrealId<T>>) -> Result<Self> {
         if self.only {
             Ok(self)
         } else {
-            let targets: Vec<FromTarget> = vec![FromTarget::RecordList(targets)];
+            let targets: Vec<FromTarget<T>> = vec![FromTarget::RecordList(targets)];
             self.targets = Some(targets);
             Ok(self)
         }
@@ -138,7 +126,7 @@ where
 
 impl<T> Returns for CreateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type
@@ -147,7 +135,7 @@ where
 #[async_trait]
 impl<T> QueryBuilder<T> for CreateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     #[instrument(skip_all)]
     fn new() -> Self {
@@ -162,7 +150,7 @@ where
             timeout: None,
             return_type: Default::default(),
             version: None,
-            phantom_data: PhantomData
+            phantom_data: PhantomData,
         }
     }
     #[instrument(skip_all)]

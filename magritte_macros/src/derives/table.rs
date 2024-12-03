@@ -18,15 +18,17 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let table_name_lit = quote!(#table_name);
     let table_name_str = &*table_name;
     let schema_type = table_attr.schema.unwrap_or("SCHEMAFULL".to_string());
-    let permissions = table_attr
-        .permissions
-        .as_ref()
-        .map(|expr_array| expr_array_to_vec(expr_array))
-        .unwrap_or_else(|| quote!(vec![]));
+    let permissions = match table_attr.permissions.as_ref() {
+        None => quote!(None), //None,
+        Some(elems) => {
+            let perms = expr_array_to_vec(elems);
+            quote!(#perms)
+        }
+    };
 
     let as_select = if let Some(as_select) = &table_attr.as_select {
         let query = as_select.to_string();
-        quote!(Some(#query))
+        quote!(Some(#query.to_string()))
     } else {
         quote!(None)
     };
@@ -67,33 +69,36 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     // Generate column enum and its implementations
     let column_impl = expand_derive_column(input.clone())?;
 
-    Ok(quote! {
+    let expanded = quote! {
         // Generate the column enum first
         #column_impl
 
         #[automatically_derived]
-        impl #impl_generics TableTrait for #ident #type_generics #where_clause {
-            fn def(&self) -> TableDef {
-                #def
-            }
-        }
-
-        #[automatically_derived]
-        impl #impl_generics NamedType for #ident #type_generics #where_clause {
+        impl #impl_generics magritte::prelude::NamedType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
                 #table_name_str
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics TableType for #ident #type_generics #where_clause {
-            fn schema_type() -> SchemaType {
+        impl #impl_generics magritte::prelude::RecordType for #ident #type_generics #where_clause {}
+
+        #[automatically_derived]
+        impl #impl_generics magritte::prelude::TableType for #ident #type_generics #where_clause {
+            fn schema_type() -> magritte::prelude::SchemaType {
                 #schema_type.into()
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics AsRef<str> for #ident #type_generics #where_clause {
+        impl #impl_generics magritte::prelude::TableTrait for #ident #type_generics #where_clause {
+            fn def(&self) -> magritte::prelude::TableDef {
+                #def
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics core::convert::AsRef<str> for #ident #type_generics #where_clause {
             fn as_ref(&self) -> &str {
                 #table_name_str
             }
@@ -104,5 +109,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
                 write!(f, "{}", #table_name_str)
             }
         }
-    })
+    };
+
+    Ok(expanded)
 }

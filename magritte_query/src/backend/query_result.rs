@@ -1,9 +1,10 @@
 //! Query result types for SurrealDB queries
 
-use std::fmt::{self, Display};
-
-use crate::types::RangeTarget;
-use serde_json::Value;
+use crate::types::{NamedType, RangeTarget, RecordType, SurrealId};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+use serde_json::{to_string, Value};
+use std::fmt::{self, Debug, Display};
 
 /// Represents a query result or subquery specification
 #[derive(Clone, Debug, PartialEq)]
@@ -46,12 +47,15 @@ impl Display for QueryResult {
 
 /// Represents a target in a FROM clause
 #[derive(Clone, Debug, PartialEq)]
-pub enum FromTarget {
+pub enum FromTarget<T>
+where
+    T: RecordType
+{
     /// A Table name
     Table(String),
-    Record(String, String), // (Table, id)
+    Record(SurrealId<T>), // (Table, id)
     /// A list of record IDs
-    RecordList(Vec<String>),
+    RecordList(Vec<SurrealId<T>>),
     /// A range of record IDs
     Range(String, RangeTarget),
     /// A subquery
@@ -60,12 +64,25 @@ pub enum FromTarget {
     Dynamic(String), // e.g., "type::Table($Table)"
 }
 
-impl Display for FromTarget {
+impl<T> Display for FromTarget<T>
+where
+    T: RecordType
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FromTarget::Table(name) => write!(f, "{}", name),
-            FromTarget::Record(table, id) => write!(f, "{}:{}", table, id),
-            FromTarget::RecordList(records) => write!(f, "[{}]", records.join(", ")),
+            FromTarget::Record(record_id) => write!(f, "{}", record_id.to_string()),
+            FromTarget::RecordList(records) => {
+                write!(
+                    f,
+                    "[{}]",
+                    records
+                        .iter()
+                        .map(|r| r.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             FromTarget::Range(name, range) => write!(f, "{}:{}", name, range),
             FromTarget::Subquery(qr) => write!(f, "({})", qr),
             FromTarget::Dynamic(expr) => write!(f, "{}", expr),

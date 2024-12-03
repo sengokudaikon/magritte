@@ -11,7 +11,7 @@ use serde::Serialize;
 use tracing::instrument;
 
 use crate::backend::QueryBuilder;
-use crate::types::TableType;
+use crate::types::{RecordType, TableType};
 use crate::SurrealDB;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Content {
@@ -21,14 +21,14 @@ pub enum Content {
     Patch(serde_json::Value),
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct UpdateStatement<T> {
+pub struct UpdateStatement<T> where T:RecordType {
     content: Option<Content>,
     _marker: PhantomData<T>,
 }
 
 impl<T> UpdateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     /// Add a MERGE operation for UPDATE
     #[instrument(skip_all)]
@@ -48,7 +48,7 @@ where
 #[async_trait]
 impl<T> QueryBuilder<T> for UpdateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn new() -> Self {
         Self { content: None,

@@ -104,7 +104,7 @@ pub fn type_to_surrealdb_type(ty: &Type) -> String {
                 [seg] if seg.ident == "Set" || seg.ident == "HashSet" => {
                     handle_set_type(&seg.arguments)
                 }
-
+                
                 [seg] if seg.ident == "RecordRef" => {
                     if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
                         if let Some(syn::GenericArgument::Type(Type::Path(type_path))) =

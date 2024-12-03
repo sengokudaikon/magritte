@@ -9,7 +9,7 @@ use serde_json::Value;
 
 use crate::backend::QueryBuilder;
 use crate::returns::Returns;
-use crate::types::{ReturnType, TableType};
+use crate::types::{RecordType, ReturnType, TableType};
 use crate::SurrealDB;
 
 /// Builder for RELATE statements
@@ -31,7 +31,7 @@ pub struct RelateStatement<T> {
 #[async_trait]
 impl<T> QueryBuilder<T> for RelateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn new() -> Self {
         Self {
@@ -122,7 +122,7 @@ where
 
 impl<T> RelateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     /// Set ONLY flag for single relation
     pub fn only(mut self) -> Self {
@@ -158,7 +158,7 @@ where
 
 impl<T> Returns for RelateStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type

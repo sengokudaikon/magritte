@@ -1,26 +1,20 @@
 use crate::prelude::{ColumnTrait, EventTrait, IndexTrait, RelationTrait};
-use magritte_query::types::{Permission, SchemaType, TableType};
+use magritte_query::types::{Permission, RecordRef, RecordType, SchemaType, SurrealId, TableType};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::str::FromStr;
 use std::time::Duration;
-use surrealdb::RecordId;
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct RecordRef<T: TableTrait> {
-    #[serde(rename = "id")]
-    pub record_id: RecordId,
-    #[serde(skip)]
-    _marker: PhantomData<T>,
-}
-impl<T: TableTrait> RecordRef<T> {
-    pub fn new(id: impl Into<RecordId>) -> Self {
-        Self {
-            record_id: id.into(),
-            _marker: PhantomData,
-        }
-    }
-}
+use serde::de::DeserializeOwned;
+use surrealdb::{sql, RecordId};
+use surrealdb::sql::Thing;
+use magritte_query::conditions::Operator;
+use magritte_query::delete::DeleteStatement;
+use magritte_query::Query;
+use magritte_query::select::SelectStatement;
+use magritte_query::update::UpdateStatement;
+use magritte_query::upsert::UpsertStatement;
+use magritte_query::wheres::WhereClause;
 /// An abstract base class for defining Entities.
 ///
 /// This trait provides an API for you to inspect its properties
@@ -35,18 +29,17 @@ impl<T: TableTrait> RecordRef<T> {
 /// - Update: `update`, `update_*`
 /// - Delete: `delete`, `delete_*`
 pub trait TableTrait: TableType {
-
     fn def(&self) -> TableDef;
 
     fn to_statement(&self) -> String {
         self.def().to_statement()
     }
 
-    fn as_ref(&self, id: impl Into<RecordId>) -> RecordRef<Self>
+    fn as_record(&self) -> RecordRef<Self>
     where
         Self: Sized,
     {
-        RecordRef::new(id)
+        RecordRef::new()
     }
 }
 
@@ -56,7 +49,7 @@ pub struct TableDef {
     pub(crate) schema_type: SchemaType,
     pub(crate) overwrite: bool,
     pub(crate) if_not_exists: bool,
-    pub(crate) permissions: Vec<Permission>,
+    pub(crate) permissions: Option<Vec<Permission>>,
     pub(crate) drop: bool,
     pub(crate) as_select: Option<String>,
     pub(crate) changefeed: Option<(Duration, bool)>,
@@ -69,7 +62,7 @@ impl TableDef {
         schema_type: impl Into<String>,
         overwrite: bool,
         if_not_exists: bool,
-        permissions: Vec<String>,
+        permissions: Option<Vec<String>>,
         drop: bool,
         as_select: Option<String>,
         changefeed: Option<(u64, bool)>,
@@ -80,7 +73,7 @@ impl TableDef {
             schema_type: SchemaType::from(schema_type.into()),
             overwrite,
             if_not_exists,
-            permissions: permissions.iter().map(|p| Permission::from(p)).collect(),
+            permissions: permissions.as_ref().map(|pers|pers.iter().map(|p| Permission::from(p)).collect()),
             drop,
             as_select,
             changefeed: changefeed.map(|c| (Duration::from_mins(c.0), c.1)),
@@ -101,8 +94,8 @@ impl TableDef {
         self.if_not_exists
     }
 
-    pub fn permissions(&self) -> &Vec<Permission> {
-        &self.permissions
+    pub fn permissions(&self) -> &[Permission] {
+        self.permissions.as_deref().unwrap_or(&[])
     }
 
     pub fn is_drop(&self) -> bool {
@@ -147,10 +140,12 @@ impl TableDef {
             }
         }
 
-        if !&self.permissions.is_empty() {
-            stmt.push_str(" PERMISSIONS ");
-            for perms in &self.permissions {
-                stmt.push_str(format!("{}", perms).as_str());
+        if let Some(permissions) = &self.permissions {
+            if !permissions.is_empty() {
+                stmt.push_str(" PERMISSIONS ");
+                for perms in permissions {
+                    stmt.push_str(format!("{}", perms).as_str());
+                }
             }
         }
 

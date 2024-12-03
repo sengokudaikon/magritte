@@ -1,13 +1,21 @@
-use crate::derives::attributes::{split_generics, Table, Event, resolve_table_name};
+use crate::derives::attributes::{split_generics, Event};
 use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use quote::{quote, format_ident};
 use syn::{Data, DeriveInput};
 
-pub fn expand_derive_event(mut input: DeriveInput, parent_input: Option<DeriveInput>) -> syn::Result<TokenStream> {
+fn strip_events_suffix(ident: &syn::Ident) -> String {
+    let name = ident.to_string();
+    if name.ends_with("Events") {
+        name[..name.len() - 6].to_string()
+    } else {
+        name
+    }
+}
+
+pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = split_generics(&input);
-    let table_attr = Table::extract_attributes(&mut input.attrs)?;
     
     let data = match &input.data {
         Data::Enum(data) => data,
@@ -18,25 +26,34 @@ pub fn expand_derive_event(mut input: DeriveInput, parent_input: Option<DeriveIn
             ));
         }
     };
-    let parent_ident = if let Some(parent_input) = parent_input {
-        parent_input.ident
-    } else {
-        format_ident!("event")
-    };
-    let parent = quote!(#parent_ident);
-    // Get Table name from parent struct's table attribute
-    let table_name = resolve_table_name(&table_attr, &parent_ident);
-    let table_name_str = &*table_name;
     let err_type = quote!(magritte::prelude::EventFromStrErr);
 
     let mut variants = Vec::new();
     let mut defs = Vec::new();
     let mut names = Vec::new();
+    let mut table_name = None;
 
     for variant in &data.variants {
         let variant_name = &variant.ident;
         let attrs = Event::extract_attributes(&mut variant.attrs.clone())?;
+        
+        // Get and validate table name from attributes
+        let current_table = attrs.table.as_ref().ok_or_else(|| {
+            syn::Error::new_spanned(variant, "Event must specify 'table' attribute")
+        })?;
 
+        // Ensure all variants reference the same table
+        if let Some(ref prev_table) = table_name {
+            if prev_table != current_table {
+                return Err(syn::Error::new_spanned(
+                    variant,
+                    "All events in an enum must reference the same table",
+                ));
+            }
+        } else {
+            table_name = Some(current_table.clone());
+        }
+        
         let event_name = attrs
             .name
             .clone()
@@ -63,7 +80,7 @@ pub fn expand_derive_event(mut input: DeriveInput, parent_input: Option<DeriveIn
         let def = quote! {
             #ident::#variant_name => EventDef::new(
                 #event_name,
-                #table_name,
+                #current_table,
                 #when_str,
                 #then_str,
                 #comment,
@@ -77,10 +94,14 @@ pub fn expand_derive_event(mut input: DeriveInput, parent_input: Option<DeriveIn
         names.push(event_name);
     }
 
+    let table_name = table_name.expect("Table name must be specified");
+    // Get parent struct name by stripping "Events" from enum name
+    let parent_struct_name = strip_events_suffix(ident);
+    let parent = format_ident!("{}", parent_struct_name);
+
     // Generate the enum and all implementations separately
     let enum_def = quote! {
-        #[derive(Debug, Copy, Clone, strum::EnumIter)]
-        #[derive(PartialEq, Eq)]
+        #[derive(Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
         pub enum #ident #type_generics #where_clause {
             #(#variants,)*
             #[doc(hidden)]
@@ -89,8 +110,10 @@ pub fn expand_derive_event(mut input: DeriveInput, parent_input: Option<DeriveIn
     };
 
     let trait_impls = quote! {
+
         #[automatically_derived]
-        impl #impl_generics EventTrait for #ident #type_generics #where_clause {
+
+        impl #impl_generics magritte::prelude::EventTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
             fn def(&self) -> EventDef {
@@ -101,45 +124,48 @@ pub fn expand_derive_event(mut input: DeriveInput, parent_input: Option<DeriveIn
             }
         }
 
-        impl #impl_generics EventType for #ident #type_generics #where_clause {
+        #[automatically_derived]
+
+        impl #impl_generics magritte::prelude::EventType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
-                #table_name_str
+                #table_name
             }
 
-            fn event_name(&self) -> & str {
+            fn event_name(&self) -> &str {
                 match self {
-                    #(#ident::#variants => &*#names,)*
+                    #(#ident::#variants => #names,)*
                     #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
 
+        #[automatically_derived]
         impl #impl_generics std::str::FromStr for #ident #type_generics #where_clause {
             type Err = #err_type;
 
             fn from_str(s: &str) -> Result<#ident, #err_type> {
                 match s {
-                    #(s if s == &*#names => Ok(#ident::#variants),)*
+                    #(s if s == #names => Ok(#ident::#variants),)*
                     _ => Err(<#err_type>::new(s.to_owned()))
                 }
             }
         }
 
-        impl #impl_generics AsRef<str> for #ident #type_generics #where_clause {
+        #[automatically_derived]
+        impl #impl_generics core::convert::AsRef<str> for #ident #type_generics #where_clause {
             fn as_ref(&self) -> &str {
                 match self {
-                    #(#ident::#variants => &*#names,)*
+                    #(#ident::#variants => #names,)*
                     #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
 
+        #[automatically_derived]
         impl #impl_generics std::fmt::Display for #ident #type_generics #where_clause {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self {
-                    #(#ident::#variants => write!(f, "{}", #names),)*
-                    #ident::__Phantom(_) => unreachable!()
-                }
+                #(#ident::#variants => write!(f, "{}", #names),)*
+                #ident::__Phantom(_) => unreachable!()
             }
         }
     };

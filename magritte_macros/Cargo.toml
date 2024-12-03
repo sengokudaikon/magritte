@@ -9,6 +9,7 @@ description = "Derive macros for magritte"
 [lib]
 proc-macro = true
 [dependencies]
+inherent = "1.0.11"
 quote = "1"
 proc-macro2 = { version = "1.0",features = ["default"] }
 syn = { version = "2", default-features = false, features = ["parsing", "proc-macro", "derive", "printing"] }
@@ -30,6 +31,18 @@ serde_json = "1"
 [dev-dependencies]
 magritte= { path = "..", features = ["tests-cfg"] }
 serde = { version = "1.0", features = ["derive"] }
+
+
+[[test]]
+name = "unit"
+path = "tests/unit/mod.rs"
+required-features = ["full"]
+
+[[test]]
+name = "functional"
+path = "tests/functional/mod.rs"
+required-features = ["full"]
+
 [features]
 default = []
 full = ["default","uuid","geo"]

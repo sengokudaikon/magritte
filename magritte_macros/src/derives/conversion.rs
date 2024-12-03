@@ -19,7 +19,7 @@ pub fn expr_to_tokens(expr: &Expr) -> TokenStream {
 pub fn expr_array_to_vec(array: &ExprArray) -> TokenStream {
     let elements = array.elems.iter();
     quote! {
-        vec![#(#elements),*]
+        Some(vec![#(#elements),*])
     }
 }
 pub fn parse_number<T: std::str::FromStr>(lit: &Lit) -> Option<T> {

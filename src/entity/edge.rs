@@ -6,7 +6,7 @@ use std::fmt::{Debug, Display};
 pub struct EdgeDef {
     pub(crate) name: String,
     pub(crate) schema_type: SchemaType,
-    pub(crate) permissions: Vec<Permission>,
+    pub(crate) permissions: Option<Vec<Permission>>,
     pub(crate) from: String,
     pub(crate) to: String,
     pub(crate) overwrite: bool,
@@ -30,7 +30,7 @@ impl EdgeDef {
         from: impl Into<String>,
         to: impl Into<String>,
         schema_type: impl Into<String>,
-        permissions: Vec<String>,
+        permissions: Option<Vec<String>>,
         overwrite: bool,
         if_not_exists: bool,
         drop: bool,
@@ -39,7 +39,7 @@ impl EdgeDef {
         Self {
             name: name.into(),
             schema_type: SchemaType::from(schema_type.into()),
-            permissions: permissions.iter().map(|c| Permission::from(c)).collect(),
+            permissions: permissions.as_ref().map(|pers|pers.iter().map(|c| Permission::from(c)).collect()),
             from: from.into(),
             to: to.into(),
             overwrite,
@@ -54,8 +54,8 @@ impl EdgeDef {
     pub fn schema_type(&self) -> &SchemaType {
         &self.schema_type
     }
-    pub fn permissions(&self) -> &Vec<Permission> {
-        &self.permissions
+    pub fn permissions(&self) -> &[Permission] {
+        self.permissions.as_deref().unwrap_or(&[])
     }
     pub fn edge_from(&self) -> &str {
         self.from.as_str()
@@ -94,10 +94,13 @@ impl EdgeDef {
         if self.enforced {
             stmt.push_str(" ENFORCED");
         }
-        if !&self.permissions.is_empty() {
-            stmt.push_str(" PERMISSIONS ");
-            for perms in &self.permissions {
-                stmt.push_str(format!("{}", perms).as_str());
+
+        if let Some(permissions) = &self.permissions {
+            if !permissions.is_empty() {
+                stmt.push_str(" PERMISSIONS ");
+                for perms in permissions {
+                    stmt.push_str(format!("{}", perms).as_str());
+                }
             }
         }
 

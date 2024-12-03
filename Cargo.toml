@@ -7,6 +7,7 @@ authors = ["Daniil Zavrin <hanamik0@proton.me>"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+inherent = "1.0.11"
 async-stream = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
 chrono = { version = "0.4.30", default-features = false, optional = true }

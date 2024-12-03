@@ -2,6 +2,7 @@
 //!
 //! This module contains operations related to inserting records into tables.
 
+use std::fmt::{Debug, Display};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -12,7 +13,7 @@ use tracing::instrument;
 
 use crate::backend::QueryBuilder;
 use crate::query_result::FromTarget;
-use crate::types::{ReturnType, TableType};
+use crate::types::{NamedType, RecordType, ReturnType, TableType};
 use crate::SurrealDB;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -24,8 +25,11 @@ pub enum Content {
 }
 /// INSERT query builder with allowed method chains
 #[derive(Clone, Debug, PartialEq)]
-pub struct InsertStatement<T> {
-    pub(crate) targets: Option<Vec<FromTarget>>,
+pub struct InsertStatement<T>
+where
+    T: RecordType
+{
+    pub(crate) targets: Option<Vec<FromTarget<T>>>,
     pub(crate) only: bool,
     pub(crate) content: Option<Content>,
     pub(crate) parameters: Vec<(String, serde_json::Value)>,
@@ -37,10 +41,14 @@ pub struct InsertStatement<T> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl <T> InsertStatement<T>
+impl<T> InsertStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned
+    T: RecordType
 {
+    pub fn content(mut self, content: T) -> Result<Self> {
+        self.content = Some(Content::Value(serde_json::to_value(content)?));
+        Ok(self)
+    }
     #[instrument(skip_all)]
     pub fn values<C>(mut self, values: Vec<C>) -> Result<Self>
     where
@@ -117,7 +125,8 @@ where
 }
 #[async_trait]
 impl<T> QueryBuilder<T> for InsertStatement<T>
-where T: TableType + Serialize + DeserializeOwned
+where
+    T: RecordType
 {
     fn new() -> Self {
         Self {

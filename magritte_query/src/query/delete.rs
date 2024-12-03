@@ -2,7 +2,7 @@
 //!
 //! This module contains operations related to deleting records from tables.
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::time::Duration;
 
@@ -13,21 +13,25 @@ use serde::Serialize;
 use serde_json::Value;
 use tracing::{error, info, instrument};
 
-use crate::backend::QueryBuilder;
 use crate::backend::value::SqlValue;
+use crate::backend::QueryBuilder;
 use crate::conditions::Operator;
 use crate::expr::{HasConditions, HasParams};
 use crate::query_result::FromTarget;
+use crate::query_result::FromTarget::RecordList;
 use crate::returns::Returns;
-use crate::types::{RangeTarget, ReturnType, TableType};
+use crate::types::{NamedType, RangeTarget, RecordType, ReturnType, SurrealId, TableType};
 use crate::wheres::WhereClause;
 use crate::SurrealDB;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeleteStatement<T> {
-    pub(crate) with_id: Option<String>,
+pub struct DeleteStatement<T>
+where
+    T:RecordType
+{
+    pub(crate) with_id: Option<SurrealId<T>>,
     pub(crate) with_range: Option<RangeTarget>,
-    pub(crate) targets: Option<Vec<FromTarget>>,
+    pub(crate) targets: Option<Vec<FromTarget<T>>>,
     pub(crate) only: bool,
     pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
     pub(crate) parameters: Vec<(String, Value)>,
@@ -36,12 +40,12 @@ pub struct DeleteStatement<T> {
     pub(crate) return_type: Option<ReturnType>,
     phantom: PhantomData<T>,
 }
-impl<T> DeleteStatement <T>
+impl<T> DeleteStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
-    pub fn with_id(mut self, id: &str) -> Self {
-        self.with_id = Some(id.to_string());
+    pub fn where_id(mut self, id: SurrealId<T>) -> Self {
+        self.with_id = Some(id);
         self
     }
 
@@ -50,11 +54,11 @@ where
         self
     }
 
-    pub fn targets_list(mut self, targets: Vec<String>) -> anyhow::Result<Self> {
+    pub fn targets(mut self, targets: Vec<SurrealId<T>>) -> anyhow::Result<Self> {
         if self.only {
             Ok(self)
         } else {
-            let targets: Vec<FromTarget> = vec![FromTarget::RecordList(targets)];
+            let targets = vec![FromTarget::RecordList(targets)];
             self.targets = Some(targets);
             Ok(self)
         }
@@ -88,7 +92,7 @@ where
 }
 impl<T> HasParams for DeleteStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn params(&self) -> &Vec<(String, Value)> {
         &self.parameters
@@ -100,7 +104,7 @@ where
 }
 impl<T> HasConditions for DeleteStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
         &mut self.conditions
@@ -108,7 +112,7 @@ where
 }
 impl<T> Returns for DeleteStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type
@@ -117,7 +121,7 @@ where
 #[async_trait]
 impl<T> QueryBuilder<T> for DeleteStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     #[instrument(skip_all)]
     fn new() -> Self {
@@ -225,7 +229,7 @@ where
 }
 
 /// Builder for edge deletion operations
-pub struct EdgeDeleteStatement<T> {
+pub struct EdgeDeleteStatement<T> where T:RecordType {
     inner: DeleteStatement<T>,
     edge: String,
     from_id: Option<String>,
@@ -234,7 +238,7 @@ pub struct EdgeDeleteStatement<T> {
 
 impl<T> EdgeDeleteStatement<T>
 where
-    T: TableType + Serialize + DeserializeOwned,
+    T: RecordType
 {
     #[instrument(skip(inner))]
     pub fn new(inner: DeleteStatement<T>, edge: &str) -> Self {

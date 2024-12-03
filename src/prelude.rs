@@ -1,7 +1,7 @@
 
 
 pub use magritte_macros::{
-    Edge, Entity, Event, Index, Relation, Column, Table
+    Edge, Event, Index, Relation, Column, Table
 };
 pub use super::entity::column::ColumnTrait;
 pub use super::entity::edge::EdgeTrait;
@@ -9,7 +9,6 @@ pub use super::entity::event::EventTrait;
 pub use super::entity::index::IndexTrait;
 pub use super::entity::relation::RelationTrait;
 pub use super::entity::table::TableTrait;
-pub use super::entity::base::EntityTrait;
 pub use magritte_query;
 pub use magritte_macros::EnumIter;
 pub use strum;

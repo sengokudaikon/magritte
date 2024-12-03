@@ -1,4 +1,4 @@
-use magritte_query::types::{ColumnType, NamedType, Permission, TableType};
+use magritte_query::types::{ColumnType, NamedType, Permission};
 use std::fmt::Display;
 
 /// Defines a Column for an Entity
@@ -10,7 +10,8 @@ pub struct ColumnDef {
     pub(crate) null: bool,
     pub(crate) default: Option<String>,
     pub(crate) assert: Option<String>,
-    pub(crate) permissions: Vec<Permission>,
+    pub(crate) permissions: Option<Vec<Permission>>,
+    pub(crate) value: Option<String>,
     pub(crate) readonly: bool,
     pub(crate) flexible: bool,
     pub(crate) comment: Option<String>,
@@ -32,7 +33,8 @@ impl ColumnDef {
         col_type: impl Into<String>,
         default: Option<String>,
         assert: Option<String>,
-        permissions: Vec<String>,
+        permissions: Option<Vec<String>>,
+        value: Option<String>,
         null: bool,
         readonly: bool,
         flexible: bool,
@@ -45,7 +47,10 @@ impl ColumnDef {
             null,
             default: default.into(),
             assert: assert.into(),
-            permissions: permissions.into_iter().map(|p| Permission::from(p)).collect(),
+            permissions: permissions
+                .as_ref()
+                .map(|pers| pers.into_iter().map(|p| Permission::from(p)).collect()),
+            value,
             readonly,
             flexible,
             comment: comment.into(),
@@ -64,8 +69,7 @@ impl ColumnDef {
         self.col_type.as_str()
     }
 
-    pub fn is_nullable(&self) -> bool
-    {
+    pub fn is_nullable(&self) -> bool {
         self.null
     }
 
@@ -82,7 +86,7 @@ impl ColumnDef {
     }
 
     pub fn permissions(&self) -> &[Permission] {
-        &self.permissions
+        self.permissions.as_deref().unwrap_or(&[])
     }
 
     pub fn default(&self) -> Option<&str> {
@@ -94,10 +98,10 @@ impl ColumnDef {
     }
 
     pub fn to_statement(&self) -> String {
-        let mut stmt = format!(
-            "DEFINE FIELD {} ON TABLE {}",
-            self.name, self.table_name
-        );
+        if self.name == "id" {
+            return "".to_string();
+        }
+        let mut stmt = format!("DEFINE FIELD {} ON TABLE {}", self.name, self.table_name);
 
         if self.flexible {
             stmt.push_str(" FLEXIBLE");
@@ -116,10 +120,16 @@ impl ColumnDef {
             stmt.push_str(&format!(" ASSERT {}", assert));
         }
 
-        if !&self.permissions.is_empty() {
-            stmt.push_str(" PERMISSIONS ");
-            for perms in &self.permissions {
-                stmt.push_str(format!("{}", perms).as_str());
+        if let Some(value) = &self.value {
+            stmt.push_str(&format!(" VALUE {}", value));
+        }
+
+        if let Some(permissions) = &self.permissions {
+            if !permissions.is_empty() {
+                stmt.push_str(" PERMISSIONS ");
+                for perms in permissions {
+                    stmt.push_str(format!("{}", perms).as_str());
+                }
             }
         }
 

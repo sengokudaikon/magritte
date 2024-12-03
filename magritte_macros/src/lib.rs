@@ -16,7 +16,7 @@ use thiserror::Error;
 ///
 /// # Core Concepts
 ///
-/// - **Tables**: Main data structures defined using the `Entity` derive macro
+/// - **Tables**: Main data structures defined using the `Table` derive macro
 /// - **Edges**: Relationships between tables defined using the `Edge` derive macro
 /// - **Events**: Database triggers defined using the `Event` derive macro
 /// - **Indexes**: Search and lookup optimizations defined using the `Index` derive macro
@@ -24,13 +24,13 @@ use thiserror::Error;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// use magritte::prelude::*;
 /// use chrono::{DateTime, Utc};
 /// use serde::{Deserialize, Serialize};
 ///
 /// // Define a table
-/// #[derive(Entity, Debug, Serialize, Deserialize)]
+/// #[derive(Table, Debug, Serialize, Deserialize)]
 /// #[table(
 ///     name = "users",
 ///     schema = "schemafull",
@@ -56,6 +56,7 @@ use thiserror::Error;
 /// #[derive(Event)]
 /// enum UserEvents {
 ///     #[event(
+///         table = "users",
 ///         when = "CREATE",
 ///         then = "CREATE audit::log SET user = $after.id, action = 'created'"
 ///     )]
@@ -65,10 +66,11 @@ use thiserror::Error;
 /// // Define indexes
 /// #[derive(Index)]
 /// enum UserIndexes {
-///     #[index(fields = ["email"], unique)]
+///     #[index(table = "users",fields = ["email"], unique)]
 ///     Email,
 ///
 ///     #[index(
+///         table = "users",
 ///         fields = ["bio"],
 ///         search(analyzer = "english", highlights = true)
 ///     )]
@@ -79,6 +81,7 @@ use thiserror::Error;
 /// #[derive(Relation)]
 /// enum UserRelations {
 ///     #[relate(
+///         from = "users",
 ///         in_id = "id",
 ///         to = "Post",
 ///         out_id = "id",
@@ -91,9 +94,9 @@ use thiserror::Error;
 ///
 /// # Features
 ///
-/// ## Entity Derive
+/// ## Table Derive
 ///
-/// The `Entity` derive macro automatically:
+/// The `Table` derive macro automatically:
 /// - Generates a Column enum for type-safe field access
 /// - Handles field types and nullability automatically
 /// - Supports custom column attributes
@@ -146,15 +149,6 @@ use thiserror::Error;
 /// - Relationship validity
 /// - Event and index configurations
 /// - Schema consistency
-
-#[proc_macro_derive(Entity, attributes(entity, table, column))]
-pub fn derive_entity(input: TokenStream) -> TokenStream {
-    let input: DeriveInput = syn::parse(input).unwrap();
-    derives::expand_derive_entity(input)
-        .unwrap_or_else(|err| err.to_compile_error())
-        .into()
-}
-
 #[proc_macro_derive(Table, attributes(table, column))]
 pub fn derive_table(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
@@ -174,7 +168,7 @@ pub fn derive_column(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Event, attributes(event))]
 pub fn derive_event(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-    derives::expand_derive_event(input, None)
+    derives::expand_derive_event(input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
@@ -182,7 +176,7 @@ pub fn derive_event(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Index, attributes(index))]
 pub fn derive_index(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-    derives::expand_derive_index(input, None)
+    derives::expand_derive_index(input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }
@@ -190,7 +184,7 @@ pub fn derive_index(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Relation, attributes(relate))]
 pub fn derive_relation(input: TokenStream) -> TokenStream {
     let input: DeriveInput = syn::parse(input).unwrap();
-    derives::expand_derive_relation(input, None)
+    derives::expand_derive_relation(input)
         .unwrap_or_else(|err| err.to_compile_error())
         .into()
 }

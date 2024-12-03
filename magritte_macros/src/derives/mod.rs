@@ -1,7 +1,6 @@
 pub mod attributes;
 pub mod column;
 pub mod edge;
-pub mod entity;
 pub mod event;
 pub mod index;
 pub mod relation;
@@ -11,7 +10,6 @@ pub mod conversion;
 pub use self::attributes::*;
 pub use self::column::*;
 pub use self::edge::*;
-pub use self::entity::*;
 pub use self::event::*;
 pub use self::index::*;
 pub use self::relation::*;
