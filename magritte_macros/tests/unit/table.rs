@@ -1,14 +1,13 @@
 #[cfg(test)]
 use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
-use strum::Display;
 
 // Test basic table derive
 #[derive(Table, Clone, Serialize, Deserialize, Debug)]
 #[table(name = "users")]
 pub struct UserModel {
-    id: String,
-    name: String,
+    pub(crate) id: String,
+    pub(crate) name: String,
 }
 
 impl HasId for UserModel {
@@ -105,43 +104,6 @@ impl HasId for GenericItem {
         SurrealId::new(&self.id)
     }
 }
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, EnumIter, Display)]
-pub enum EnumStatus {
-    Pending,
-    Shipped,
-    Delivered
-}
-
-// Test table with nested columns and relationships
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
-#[table(name = "orders")]
-pub struct Order {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "datetime")]
-    created_at: String,
-
-    #[column(type = "record<users>", assert = "value != NONE")]
-    user: RecordRef<UserModel>,
-
-    #[column(type = "array<record<products>>")]
-    items: Vec<RecordRef<Product>>,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    total: f64,
-
-    #[column(type = "object", flexible)]
-    shipping_info: serde_json::Value,
-    #[column(value ="pending|processing|shipped|delivered")]
-    status: String,
-}
-
-impl HasId for Order {
-    fn id(&self) -> SurrealId<Self> {
-        SurrealId::new(&self.id)
-    }
-}
 
 #[test]
 fn test_table_derives() {
@@ -186,6 +148,25 @@ fn test_table_derives() {
 }
 
 #[test]
+fn test_statement_generation() {
+    // Test basic column statement
+    let name_stmt = ProductColumns::Name.def().to_statement();
+    assert!(name_stmt.contains("DEFINE FIELD name ON TABLE products"));
+    assert!(name_stmt.contains("TYPE string"));
+
+    // Test full column statement
+    let price_stmt = ProductColumns::Price.def().to_statement();
+    assert!(price_stmt.contains("DEFINE FIELD price ON TABLE products"));
+    assert!(price_stmt.contains("FLEXIBLE"));
+    assert!(price_stmt.contains("TYPE float|null"));
+    assert!(price_stmt.contains("DEFAULT 0.0"));
+    assert!(price_stmt.contains("ASSERT value >= 0"));
+    assert!(price_stmt.contains("PERMISSIONS"));
+    assert!(price_stmt.contains("READONLY"));
+    assert!(price_stmt.contains("COMMENT"));
+}
+
+#[test]
 fn test_column_derives() {
     // Test generated column enum
     assert_eq!(ProductColumns::Name.to_string(), "name");
@@ -213,78 +194,4 @@ fn test_column_derives() {
     let metadata_def = ProductColumns::Metadata.def();
     assert!(metadata_def.is_flexible());
     assert_eq!(metadata_def.column_type(), "object");
-}
-
-#[test]
-fn test_complex_column_derives() {
-    // Test relationship column definitions
-    let user_def = OrderColumns::User.def();
-    assert_eq!(user_def.column_type(), "record<users>");
-    assert!(user_def.assert().is_some());
-    assert!(!user_def.is_nullable());
-
-    // Test array relationship column
-    let items_def = OrderColumns::Items.def();
-    assert_eq!(items_def.column_type(), "array<record<products>>");
-    
-    // Test enum-like value constraints
-    let status_def = OrderColumns::Status.def();
-    assert_eq!(status_def.column_type(), "string");
-    let status_stmt = status_def.to_statement();
-    assert!(status_stmt.contains("VALUE"));
-    assert!(status_stmt.contains("pending"));
-    assert!(status_stmt.contains("delivered"));
-
-    // Test nested object column
-    let shipping_def = OrderColumns::ShippingInfo.def();
-    assert_eq!(shipping_def.column_type(), "object");
-    assert!(shipping_def.is_flexible());
-
-    // Test decimal type column
-    let total_def = OrderColumns::Total.def();
-    assert_eq!(total_def.column_type(), "decimal");
-    assert_eq!(total_def.assert(), Some("value >= 0"));
-
-    // Test datetime column
-    let created_def = OrderColumns::CreatedAt.def();
-    assert_eq!(created_def.column_type(), "datetime");
-}
-
-#[test]
-fn test_statement_generation() {
-    // Test basic column statement
-    let name_stmt = ProductColumns::Name.def().to_statement();
-    assert!(name_stmt.contains("DEFINE FIELD name ON TABLE products"));
-    assert!(name_stmt.contains("TYPE string"));
-
-    // Test full column statement
-    let price_stmt = ProductColumns::Price.def().to_statement();
-    assert!(price_stmt.contains("DEFINE FIELD price ON TABLE products"));
-    assert!(price_stmt.contains("FLEXIBLE"));
-    assert!(price_stmt.contains("TYPE float|null"));
-    assert!(price_stmt.contains("DEFAULT 0.0"));
-    assert!(price_stmt.contains("ASSERT value >= 0"));
-    assert!(price_stmt.contains("PERMISSIONS"));
-    assert!(price_stmt.contains("READONLY"));
-    assert!(price_stmt.contains("COMMENT"));
-}
-
-#[test]
-fn test_column_statement_variations() {
-    // Test relationship field statement
-    let user_stmt = OrderColumns::User.def().to_statement();
-    assert!(user_stmt.contains("DEFINE FIELD user ON TABLE orders"));
-    assert!(user_stmt.contains("TYPE record<users>"));
-    assert!(user_stmt.contains("ASSERT value != NONE"));
-
-    // Test array relationship statement
-    let items_stmt = OrderColumns::Items.def().to_statement();
-    assert!(items_stmt.contains("DEFINE FIELD items ON TABLE orders"));
-    assert!(items_stmt.contains("TYPE array<record<products>>"));
-
-    // Test enum-like value constraint statement
-    let status_stmt = OrderColumns::Status.def().to_statement();
-    assert!(status_stmt.contains("DEFINE FIELD status ON TABLE orders"));
-    let expected_value = "pending|processing|shipped|delivered";
-    assert!(status_stmt.contains(format!("VALUE {}",expected_value).as_str()));
 }

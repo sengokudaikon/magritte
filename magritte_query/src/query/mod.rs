@@ -88,8 +88,4 @@ where
     pub fn upsert() -> UpsertStatement<T> {
         UpsertStatement::new()
     }
-    /// INFO statement [`InfoStatement`]
-    pub fn info() -> InfoStatement {
-        InfoStatement::new(Arc::new(Surreal::init()))
-    }
 }

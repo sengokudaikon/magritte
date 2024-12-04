@@ -1,5 +1,3 @@
-
-
 pub use magritte_macros::{
     Edge, Event, Index, Relation, Column, Table
 };
@@ -16,6 +14,7 @@ pub use strum;
 pub use magritte_macros::*;
 pub use surrealdb::RecordId;
 pub use magritte_query::types::*;
+pub use magritte_query::types::index::*;
 pub use super::defs::*;
 pub use super::ColumnFromStrErr;
 pub use super::TableFromStrErr;
@@ -23,3 +22,7 @@ pub use super::EventFromStrErr;
 pub use super::IndexFromStrErr;
 pub use super::RelationFromStrErr;
 pub use super::EdgeFromStrErr;
+
+
+#[cfg(feature = "uuid")]
+pub use magritte_query::types::uuid::*;

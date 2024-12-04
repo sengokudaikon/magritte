@@ -23,6 +23,11 @@ pub trait EventTrait: EventType {
 }
 
 impl EventDef {
+    fn cleanup(s: impl Into<String>) -> String {
+        let mut s = s.into().replace("\"","");
+        s = s.replace("var:", "$");
+        s
+    }
     pub fn new(
         name: impl Into<String>,
         table: impl Into<String>,
@@ -37,8 +42,8 @@ impl EventDef {
             table: table.into(),
             overwrite,
             if_not_exists,
-            when: when.into(),
-            then: then.into(),
+            when: Self::cleanup(when),
+            then: Self::cleanup(then),
             comment,
         }
     }
@@ -77,10 +82,10 @@ impl EventDef {
         stmt.push_str(&self.table);
 
         stmt.push_str(" WHEN ");
-        stmt.push_str(&*self.when);
+        stmt.push_str(&*Self::cleanup(&self.when));
 
         stmt.push_str(" THEN ");
-        stmt.push_str(&*self.then);
+        stmt.push_str(&*Self::cleanup(&self.then));
 
         if let Some(comment) = &self.comment {
             stmt.push_str(&format!(" COMMENT \"{}\"", comment));

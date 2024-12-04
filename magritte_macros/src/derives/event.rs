@@ -100,32 +100,28 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let parent = format_ident!("{}", parent_struct_name);
 
     // Generate the enum and all implementations separately
-    let enum_def = quote! {
-        #[derive(Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
-        pub enum #ident #type_generics #where_clause {
-            #(#variants,)*
-            #[doc(hidden)]
-            __Phantom(::std::marker::PhantomData<#parent #type_generics>)
-        }
-    };
 
     let trait_impls = quote! {
 
-        #[automatically_derived]
+        impl #impl_generics #parent #type_generics #where_clause {
+            pub fn events() -> impl Iterator<Item = #ident #type_generics> {
+                use strum::IntoEnumIterator;
+                #ident::iter()
+            }
+        }
 
+        #[automatically_derived]
         impl #impl_generics magritte::prelude::EventTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
-            fn def(&self) -> EventDef {
+            fn def(&self) -> magritte::prelude::EventDef {
                 match self {
                     #(#defs,)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
 
         #[automatically_derived]
-
         impl #impl_generics magritte::prelude::EventType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
                 #table_name
@@ -134,7 +130,6 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
             fn event_name(&self) -> &str {
                 match self {
                     #(#ident::#variants => #names,)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
@@ -156,7 +151,6 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
             fn as_ref(&self) -> &str {
                 match self {
                     #(#ident::#variants => #names,)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
@@ -164,14 +158,14 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
         #[automatically_derived]
         impl #impl_generics std::fmt::Display for #ident #type_generics #where_clause {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                #(#ident::#variants => write!(f, "{}", #names),)*
-                #ident::__Phantom(_) => unreachable!()
+                match self {
+                    #(#ident::#variants => write!(f, "{}", #names),)*
+                }
             }
         }
     };
 
     Ok(quote! {
-        #enum_def
 
         #trait_impls
     })

@@ -107,15 +107,15 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
         let def = quote! {
             #ident::#variant_name => {
                 IndexDef::new(
-                    #index_name,
-                    #current_table,
+                    #index_name.to_string(),
+                    #current_table.to_string(),
                     #fields,
                     #columns,
                     #overwrite,
                     #use_table,
                     #if_not_exists,
                     #unique,
-                    #specifics,
+                    #specifics.to_string(),
                     #comment,
                     #concurrently,
                 )
@@ -132,26 +132,22 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
     let parent = format_ident!("{}", parent_struct_name);
 
     let err_type = quote!(magritte::IndexFromStrErr);
-    let enum_def = quote! {
-        #[derive(Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
-        pub enum #ident #type_generics #where_clause {
-            #(#index_variants,)*
-            #[doc(hidden)]
-            __Phantom(::std::marker::PhantomData<#parent #type_generics>)
-        }
-    };
-
     let trait_impls = quote! {
 
-        #[automatically_derived]
+        impl #impl_generics #parent #type_generics #where_clause {
+            pub fn indexes() -> impl Iterator<Item = #ident #type_generics> {
+                use strum::IntoEnumIterator;
+                #ident::iter()
+            }
+        }
 
+        #[automatically_derived]
         impl #impl_generics magritte::prelude::IndexTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
             fn def(&self) -> IndexDef {
                 match self {
                     #(#index_defs,)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
@@ -166,7 +162,6 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
             fn index_name(&self) -> &str {
                 match self {
                     #(#ident::#index_variants => #index_names,)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
@@ -177,7 +172,7 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
 
             fn from_str(s: &str) -> Result<#ident, #err_type> {
                 match s {
-                    #(s if s == &*#index_names => Ok(#ident::#index_variants),)*
+                    #(s if s == #index_names => Ok(#ident::#index_variants),)*
                     _ => Err(<#err_type>::new(s.to_owned())),
                 }
             }
@@ -187,8 +182,7 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
         impl #impl_generics core::convert::AsRef<str> for #ident #type_generics #where_clause {
             fn as_ref(&self) -> &str {
                 match self {
-                    #(#ident::#index_variants => &*#index_names,)*
-                    #ident::__Phantom(_) => unreachable!()
+                    #(#ident::#index_variants => #index_names,)*
                 }
             }
         }
@@ -197,15 +191,12 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
                     #(#ident::#index_variants => write!(f, "{}", #index_names),)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
     };
 
     Ok(quote! {
-        #enum_def
-
         #trait_impls
     })
 }

@@ -10,6 +10,7 @@ use surrealdb::{sql, RecordId};
 use surrealdb::sql::Thing;
 use magritte_query::conditions::Operator;
 use magritte_query::delete::DeleteStatement;
+use magritte_query::info::InfoStatement;
 use magritte_query::Query;
 use magritte_query::select::SelectStatement;
 use magritte_query::update::UpdateStatement;

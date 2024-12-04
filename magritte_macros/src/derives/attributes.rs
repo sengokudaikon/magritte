@@ -3,7 +3,7 @@ use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use std::fmt::{Display, Formatter};
 use serde::ser::Error;
-use syn::{DeriveInput, Expr, ExprArray, Path};
+use syn::{DeriveInput, Expr, ExprArray, LitStr, Path};
 
 #[derive(Default, ParseMetaItem)]
 pub struct AsSelect {
@@ -180,8 +180,8 @@ pub struct Event {
     #[deluxe(default)]
     pub name: Option<String>,
     pub table: Option<String>,
-    pub when: Option<Expr>,
-    pub then: Option<Expr>,
+    pub when: Option<LitStr>,
+    pub then: Option<LitStr>,
     #[deluxe(default)]
     pub overwrite: bool,
     #[deluxe(default)]

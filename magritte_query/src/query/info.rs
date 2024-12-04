@@ -37,9 +37,14 @@ impl InfoStatement
 
     /// Get Table level info (fields, indexes, events)
     #[instrument(skip(self))]
-    pub async fn info_table(&self, table: &str) -> anyhow::Result<JsonValue> {
+    pub async fn info_table(&self, table: &str, with_structure: bool) -> anyhow::Result<JsonValue> {
+        let mut query = String::from("INFO FOR TABLE ");
+        query.push_str("$Table");
+        if with_structure {
+            query.push_str(" STRUCTURE");
+        }
         let result: Value =
-            self.conn.query("INFO FOR TABLE $Table").bind(("Table", table.to_owned())).await?.take(0)?;
+            self.conn.query(query).bind(("Table", table.to_owned())).await?.take(0)?;
         Ok(serde_json::to_value(result)?)
     }
 

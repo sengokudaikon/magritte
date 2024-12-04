@@ -3,6 +3,8 @@
 //! This module contains operations related to selecting and retrieving data
 //! from tables.
 
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
@@ -10,7 +12,7 @@ use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{map, Value};
 use tracing::{error, info, instrument};
 
 use crate::backend::value::SqlValue;

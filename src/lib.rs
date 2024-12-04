@@ -10,7 +10,7 @@
 pub mod entity;
 pub mod prelude;
 mod defs;
-mod entity_crud;
+pub mod entity_crud;
 
 use std::collections::HashMap;
 use thiserror::Error;
