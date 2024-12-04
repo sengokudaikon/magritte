@@ -1,4 +1,5 @@
 #![feature(duration_constructors)]
+#![feature(structural_match)]
 #![allow(unused)]
 extern crate proc_macro;
 mod conversion;

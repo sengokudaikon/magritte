@@ -3,7 +3,7 @@ use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Test table with nested columns and relationships
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "orders")]
 pub struct Order {
     #[column(type = "string")]
@@ -34,10 +34,9 @@ impl HasId for Order {
 }
 
 // Test table events
-#[derive(Event, Serialize, Deserialize, Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
+#[derive(Event, Serialize, Deserialize, strum::EnumIter)]
 pub enum OrderEvents {
     #[event(
-        table = "orders",
         name = "created",
         when = "var:before==NONE",
         then = "UPDATE orders SET status = 'pending';
@@ -51,6 +50,8 @@ pub enum OrderEvents {
     )]
     Created,
 }
+
+
 
 #[test]
 fn test_complex_column_derives() {
@@ -123,7 +124,7 @@ fn test_table_events() {
 #[test]
 fn test_table_with_events() {
     // Test table with events
-    let order = Order {
+    let _order = Order {
         id: "1".to_string(),
         created_at: "2023-01-01T00:00:00Z".to_string(),
         user: UserModel {

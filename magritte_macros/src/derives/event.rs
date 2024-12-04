@@ -2,15 +2,16 @@ use crate::derives::attributes::{split_generics, Event};
 use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::{quote, format_ident};
-use syn::{Data, DeriveInput};
+use syn::{parse_quote, Data, DeriveInput};
 
-fn strip_events_suffix(ident: &syn::Ident) -> String {
+fn strip_events_suffix(ident: &syn::Ident) -> syn::Path {
     let name = ident.to_string();
-    if name.ends_with("Events") {
+    let table_name = if name.ends_with("Events") {
         name[..name.len() - 6].to_string()
     } else {
         name
-    }
+    };
+    syn::parse_str::<syn::Path>(&table_name).unwrap_or_else(|_| syn::parse_quote!(#ident))
 }
 
 pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
@@ -31,28 +32,13 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let mut variants = Vec::new();
     let mut defs = Vec::new();
     let mut names = Vec::new();
-    let mut table_name = None;
+    // Get parent struct name by stripping "Events" from enum name
+    let parent_struct = strip_events_suffix(ident);
+    let parent = &parent_struct;
 
     for variant in &data.variants {
         let variant_name = &variant.ident;
         let attrs = Event::extract_attributes(&mut variant.attrs.clone())?;
-        
-        // Get and validate table name from attributes
-        let current_table = attrs.table.as_ref().ok_or_else(|| {
-            syn::Error::new_spanned(variant, "Event must specify 'table' attribute")
-        })?;
-
-        // Ensure all variants reference the same table
-        if let Some(ref prev_table) = table_name {
-            if prev_table != current_table {
-                return Err(syn::Error::new_spanned(
-                    variant,
-                    "All events in an enum must reference the same table",
-                ));
-            }
-        } else {
-            table_name = Some(current_table.clone());
-        }
         
         let event_name = attrs
             .name
@@ -80,7 +66,7 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
         let def = quote! {
             #ident::#variant_name => EventDef::new(
                 #event_name,
-                #current_table,
+                <#parent as magritte::prelude::NamedType>::table_name(),
                 #when_str,
                 #then_str,
                 #comment,
@@ -94,15 +80,9 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
         names.push(event_name);
     }
 
-    let table_name = table_name.expect("Table name must be specified");
-    // Get parent struct name by stripping "Events" from enum name
-    let parent_struct_name = strip_events_suffix(ident);
-    let parent = format_ident!("{}", parent_struct_name);
-
     // Generate the enum and all implementations separately
 
     let trait_impls = quote! {
-
         impl #impl_generics #parent #type_generics #where_clause {
             pub fn events() -> impl Iterator<Item = #ident #type_generics> {
                 use strum::IntoEnumIterator;
@@ -124,7 +104,7 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
         #[automatically_derived]
         impl #impl_generics magritte::prelude::EventType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
-                #table_name
+                <#parent as magritte::prelude::NamedType>::table_name()
             }
 
             fn event_name(&self) -> &str {
@@ -163,6 +143,36 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
                 }
             }
         }
+
+        #[automatically_derived]
+        impl #impl_generics ::core::fmt::Debug for #ident #type_generics #where_clause {
+            #[inline]
+            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                match self {
+                    #(#ident::#variants => write!(f, "{}", #names),)*
+                }
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics ::core::marker::Copy for #ident #type_generics #where_clause {}
+        #[automatically_derived]
+        impl #impl_generics ::core::clone::Clone for #ident #type_generics #where_clause {
+            #[inline]
+            fn clone(&self) -> #ident #type_generics {
+                *self
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::PartialEq for #ident #type_generics #where_clause {
+            #[inline]
+            fn eq(&self, other: &#ident #type_generics) -> bool {
+                ::core::mem::discriminant(self) == ::core::mem::discriminant(other)
+            }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::Eq for #ident #type_generics #where_clause {}
     };
 
     Ok(quote! {

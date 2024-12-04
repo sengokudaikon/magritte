@@ -3,7 +3,7 @@ use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Test basic table derive
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "users")]
 pub struct UserModel {
     pub(crate) id: String,
@@ -17,7 +17,7 @@ impl HasId for UserModel {
 }
 
 // Test table with all possible attributes
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize, Clone)]
 #[table(
         name = "posts",
         schema = "SCHEMAFULL",
@@ -38,7 +38,7 @@ impl HasId for Posts {
 }
 
 // Test table with columns and all possible column attributes
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "products", schema = "SCHEMALESS")]
 pub struct Product {
     // Basic column
@@ -76,7 +76,7 @@ impl HasId for Product {
     }
 }
 // Test table with as_select
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(
     name = "active_users",
     as_select = {
@@ -91,7 +91,7 @@ pub struct ActiveUsers {
 }
 
 // Test table with generics
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "generic_items")]
 pub struct GenericItem {
     #[column(type = "string")]

@@ -2,15 +2,16 @@ use super::attributes::{split_generics, Relate};
 use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
-use syn::DeriveInput;
+use syn::{DeriveInput, Path};
 
-fn strip_relations_suffix(ident: &syn::Ident) -> String {
+fn strip_relations_suffix(ident: &syn::Ident) -> Path {
     let name = ident.to_string();
-    if name.ends_with("Relations") {
+    let table_name = if name.ends_with("Relations") {
         name[..name.len() - 9].to_string()
     } else {
         name
-    }
+    };
+    syn::parse_str::<syn::Path>(&table_name).unwrap_or_else(|_| syn::parse_quote!(#ident))
 }
 
 pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -27,39 +28,17 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
         }
     };
 
-    // Get parent struct name by stripping "Relations" from enum name
-    let parent_struct_name = strip_relations_suffix(ident);
-    let parent = format_ident!("{}", parent_struct_name);
-
     let mut relation_variants = Vec::new();
     let mut relation_defs = Vec::new();
-    let mut edge_tables = Vec::new();
-    let mut relation_strings = Vec::new();
-    let mut from_strings = Vec::new();
-    let mut to_strings = Vec::new();
-    let mut table_name = None;
+    let mut relation_from = Vec::new();
+    let mut relation_to = Vec::new();
+    let mut relation_via = Vec::new();
+    let parent_struct = strip_relations_suffix(ident);
+    let parent = &parent_struct;
 
     for variant in &data.variants {
         let variant_name = &variant.ident;
         let mut attrs = Relate::extract_attributes(&mut variant.attrs.clone())?;
-
-        // Get and validate table name from attributes
-        let current_table = attrs.from.as_ref().ok_or_else(|| {
-            syn::Error::new_spanned(variant, "Relation must specify 'table' attribute")
-        })?;
-
-        // Ensure all variants reference the same table
-        if let Some(ref prev_table) = table_name {
-            if prev_table != current_table {
-                return Err(syn::Error::new_spanned(
-                    variant,
-                    "All relations in an enum must reference the same table",
-                ));
-            }
-        } else {
-            table_name = Some(current_table.clone());
-        }
-
         let in_id = attrs
             .in_id
             .take()
@@ -67,6 +46,7 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
         let to_table = attrs.to.take().ok_or_else(|| {
             syn::Error::new_spanned(variant, "Relation must specify target Table")
         })?;
+
         let out_id = attrs
             .out_id
             .take()
@@ -74,116 +54,87 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
         let edge_table = attrs.edge.take().ok_or_else(|| {
             syn::Error::new_spanned(variant, "Relation must specify edge Table")
         })?;
+
         let content = attrs
             .content
             .take()
             .map(|c| quote!(Some(#c.to_string())))
             .unwrap_or_else(|| quote!(None));
 
-        let from = format!("{}:{}", current_table, in_id);
-        let to = format!("{}:{}", to_table, out_id);
+        let from_str = quote!(<#parent as magritte::prelude::NamedType>::table_name());
+        let to_str = quote!(<#to_table as magritte::prelude::NamedType>::table_name());
+        let edge_str = quote!(<#edge_table as magritte::prelude::NamedType>::table_name());
+        let from = quote!(format!("{}:{}", #from_str, #in_id));
+        let to = quote!(format!("{}:{}", #to_str, #out_id));
         let def = quote! {
             #ident::#variant_name => {
-                RelationDef::new(#from, #to, #edge_table, #content)
+                RelationDef::new(#from, #to, #edge_str, #content)
             }
         };
-        let relation_string = format!(
-            "{}->{}->{}",
-            from, edge_table, to
-        );
 
         relation_variants.push(quote!(#variant_name));
         relation_defs.push(def);
-        edge_tables.push(edge_table);
-        relation_strings.push(relation_string);
-        from_strings.push(from);
-        to_strings.push(to);
+        relation_from.push(from);
+        relation_via.push(edge_str);
+        relation_to.push(to);
     }
 
-    let table_name = table_name.expect("Table name must be specified");
-
     let err_type = quote!(magritte::RelationFromStrErr);
-    let enum_def = quote! {
-        #[derive(Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
-        pub enum #ident #type_generics #where_clause {
-            #(#relation_variants,)*
-            #[doc(hidden)]
-            __Phantom(::std::marker::PhantomData<#parent #type_generics>)
-        }
-    };
-
     let trait_impls = quote! {
         #[automatically_derived]
-
         impl #impl_generics magritte::prelude::RelationTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
             fn def(&self) -> RelationDef {
                 match self {
                     #(#relation_defs,)*
-                    #ident::__Phantom(_) => unreachable!()
                 }
             }
         }
 
         #[automatically_derived]
-
         impl #impl_generics magritte::prelude::RelationType for #ident #type_generics #where_clause {
             fn relation_via(&self) -> &str {
                 match self {
-                    #(#ident::#relation_variants => #edge_tables,)*
-                    #ident::__Phantom(_) => unreachable!()
+                    #(#ident::#relation_variants => #relation_via,)*
                 }
             }
 
-            fn relation_from(&self) -> &str {
+            fn relation_from(&self) -> String {
                 match self {
-                    #(#ident::#relation_variants => #from_strings,)*
-                    #ident::__Phantom(_) => unreachable!()
+                    #(#ident::#relation_variants => #relation_from,)*
                 }
             }
 
-            fn relation_to(&self) -> &str {
+            fn relation_to(&self) -> String {
                 match self {
-                    #(#ident::#relation_variants => #to_strings,)*
-                    #ident::__Phantom(_) => unreachable!()
+                    #(#ident::#relation_variants => #relation_to,)*
                 }
             }
         }
 
-        impl #impl_generics std::str::FromStr for #ident #type_generics #where_clause {
-            type Err = #err_type;
-
-            fn from_str(s: &str) -> Result<#ident, #err_type> {
-                match s {
-                    #(s if s == #relation_strings => Ok(#ident::#relation_variants),)*
-                    _ => Err(<#err_type>::new(s.to_owned())),
-                }
+        #[automatically_derived]
+        impl #impl_generics ::core::marker::Copy for #ident #type_generics #where_clause {}
+        #[automatically_derived]
+        impl #impl_generics ::core::clone::Clone for #ident #type_generics #where_clause {
+            #[inline]
+            fn clone(&self) -> #ident #type_generics {
+                *self
             }
         }
 
-        impl #impl_generics core::convert::AsRef<str> for #ident #type_generics #where_clause {
-            fn as_ref(&self) -> &str {
-                match self {
-                    #(#ident::#relation_variants => #relation_strings,)*
-                    #ident::__Phantom(_) => unreachable!()
-                }
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::PartialEq for #ident #type_generics #where_clause {
+            #[inline]
+            fn eq(&self, other: &#ident #type_generics) -> bool {
+                ::core::mem::discriminant(self) == ::core::mem::discriminant(other)
             }
         }
-
-        impl #impl_generics std::fmt::Display for #ident #type_generics #where_clause {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                match self {
-                    #(#ident::#relation_variants => write!(f, "{}", #relation_strings),)*
-                    #ident::__Phantom(_) => unreachable!()
-                }
-            }
-        }
-
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::Eq for #ident #type_generics #where_clause {}
     };
 
     Ok(quote! {
-        #enum_def
 
         #trait_impls
     })

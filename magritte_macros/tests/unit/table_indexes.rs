@@ -2,7 +2,7 @@ use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Test table with nested columns and relationships
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "products")]
 pub struct Product {
     #[column(type = "string")]
@@ -15,7 +15,7 @@ pub struct Product {
     price: f64,
 }
 
-#[derive(Table, Clone, Serialize, Deserialize, Debug)]
+#[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "users")]
 pub struct UserModel {
     #[column(type = "string")]
@@ -29,10 +29,9 @@ pub struct UserModel {
 }
 
 // Test index for Product table
-#[derive(Index, Serialize, Deserialize, Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
+#[derive(Index, Serialize, Deserialize,strum::EnumIter)]
 pub enum ProductIndexes {
     #[index(
-        table="products",
         name = "price_idx",
         fields = [price],
         comment = "Index on product price"
@@ -40,7 +39,6 @@ pub enum ProductIndexes {
     PriceIdx,
 
     #[index(
-        table="products",
         name = "name_idx",
         columns = [name],
         unique = true,
@@ -50,10 +48,9 @@ pub enum ProductIndexes {
 }
 
 // Test index for UserModel table
-#[derive(Index, Serialize, Deserialize, Debug, Copy, Clone, strum::EnumIter, PartialEq, Eq)]
+#[derive(Index, Serialize, Deserialize,strum::EnumIter)]
 pub enum UserModelIndexes {
     #[index(
-        table="users",
         name = "email_idx",
         columns = [email],
         unique,
@@ -62,7 +59,6 @@ pub enum UserModelIndexes {
     EmailIdx,
 
     #[index(
-        table="users",
         name = "name_idx",
         fields = [name],
         if_not_exists,
@@ -113,7 +109,7 @@ fn test_user_model_indexes_derive() {
     assert_eq!(name_idx.def().fields(), Some(vec!["name"]));
     assert_eq!(name_idx.def().columns(), None);
     assert_eq!(name_idx.def().is_unique(), false);
-    assert_eq!(name_idx.def().comment(), None);
+    assert_eq!(name_idx.def().comment(), Some("IF NOT EXISTS index on user name"));
     assert_eq!(name_idx.def().is_concurrent(), false);
     assert_eq!(name_idx.def().if_not_exists(), true);
 }

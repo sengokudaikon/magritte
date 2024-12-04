@@ -1,6 +1,7 @@
 use super::attributes::{split_generics, Edge};
 use crate::derives::{conversion, expand_derive_column, expr_array_to_vec};
 use deluxe::ExtractAttributes;
+use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput};
@@ -25,7 +26,7 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
         .name
         .as_ref()
         .map(|name| name.clone())
-        .unwrap_or_else(|| ident.to_string().to_lowercase());
+        .unwrap_or_else(|| ident.to_string().to_snake_case());
     let edge_name_lit = quote!(#edge_name);
     let from_type = attrs
         .from
@@ -57,8 +58,8 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let def = quote! {
         EdgeDef::new(
                     #edge_name_lit.to_string(),
-                    <Self::EntityFrom as magritte::prelude::NamedType>::table_name(),
-                    <Self::EntityTo as magritte::prelude::NamedType>::table_name(),
+                    <#from_type as magritte::prelude::NamedType>::table_name(),
+                    <#to_type as magritte::prelude::NamedType>::table_name(),
                     #schema_type,
                     #permissions,
                     #overwrite,
@@ -117,6 +118,13 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
         #[automatically_derived]
         impl #impl_generics std::fmt::Display for #ident #type_generics #where_clause {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", #edge_name_lit)
+            }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::fmt::Debug for #ident #type_generics #where_clause {
+            #[inline]
+            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 write!(f, "{}", #edge_name_lit)
             }
         }

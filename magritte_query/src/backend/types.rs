@@ -239,20 +239,16 @@ pub trait IndexType:
 }
 
 pub trait RelationType:
-    FromStr
-    + Display
-    + AsRef<str>
-    + Clone
+    Clone
     + Send
     + Sync
-    + Debug
     + Copy
     + strum::IntoEnumIterator
     + 'static
 {
     fn relation_via(&self) -> &str;
-    fn relation_from(&self) -> &str;
-    fn relation_to(&self) -> &str;
+    fn relation_from(&self) -> String;
+    fn relation_to(&self) -> String;
 }
 
 pub trait ColumnTypeLite:
@@ -399,9 +395,6 @@ impl<T> From<serde_json::Value> for SurrealId<T> where T: RecordType {
         SurrealId::new(value.to_string())
     }
 }
-
+pub mod index;
 #[cfg(feature = "uuid")]
 pub mod uuid;
-
-pub mod index;
-

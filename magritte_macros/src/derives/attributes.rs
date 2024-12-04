@@ -2,6 +2,7 @@ use deluxe::{ExtractAttributes, ParseMetaItem};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use std::fmt::{Display, Formatter};
+use heck::ToSnakeCase;
 use serde::ser::Error;
 use syn::{DeriveInput, Expr, ExprArray, LitStr, Path};
 
@@ -547,15 +548,15 @@ impl ToTokens for Edge {
 #[deluxe(attributes(relate))]
 pub struct Relate {
     #[deluxe(default)]
-    pub from: Option<String>,
-    #[deluxe(default)]
+    pub from: Option<Path>,
+    #[deluxe(default, rename = in)]
     pub in_id: Option<String>,
     #[deluxe(default)]
-    pub to: Option<String>,
-    #[deluxe(default)]
+    pub to: Option<Path>,
+    #[deluxe(default, rename = out)]
     pub out_id: Option<String>,
     #[deluxe(default)]
-    pub edge: Option<String>,
+    pub edge: Option<Path>,
     #[deluxe(default)]
     pub content: Option<Expr>,
 }
@@ -602,10 +603,16 @@ pub trait HasTableName {
 pub fn resolve_table_name(attrs: &impl HasTableName, ident: &syn::Ident) -> String {
     attrs
         .table_name()
-        .unwrap_or_else(|| ident.to_string().to_lowercase())
+        .unwrap_or_else(|| ident.to_string().to_snake_case())
 }
 
 impl HasTableName for Table {
+    fn table_name(&self) -> Option<String> {
+        self.name.as_ref().map(|lit| lit.to_string())
+    }
+}
+
+impl HasTableName for Edge {
     fn table_name(&self) -> Option<String> {
         self.name.as_ref().map(|lit| lit.to_string())
     }

@@ -5,13 +5,14 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput};
 
-fn strip_indexes_suffix(ident: &syn::Ident) -> String {
+fn strip_indexes_suffix(ident: &syn::Ident) -> syn::Path {
     let name = ident.to_string();
-    if name.ends_with("Indexes") {
+    let table_name = if name.ends_with("Indexes") {
         name[..name.len() - 7].to_string()
     } else {
         name
-    }
+    };
+    syn::parse_str::<syn::Path>(&table_name).unwrap_or_else(|_| syn::parse_quote!(#ident))
 }
 
 pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -31,28 +32,12 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut index_variants = Vec::new();
     let mut index_defs = Vec::new();
     let mut index_names = Vec::new();
-    let mut table_name = None;
+    let parent_struct = strip_indexes_suffix(ident);
+    let parent = &parent_struct;
 
     for variant in &data.variants {
         let variant_name = &variant.ident;
         let attrs = Index::extract_attributes(&mut variant.attrs.clone())?;
-
-        // Get and validate table name from attributes
-        let current_table = attrs.table.as_ref().ok_or_else(|| {
-            syn::Error::new_spanned(variant, "Index must specify 'table' attribute")
-        })?;
-
-        // Ensure all variants reference the same table
-        if let Some(ref prev_table) = table_name {
-            if prev_table != current_table {
-                return Err(syn::Error::new_spanned(
-                    variant,
-                    "All indexes in an enum must reference the same table",
-                ));
-            }
-        } else {
-            table_name = Some(current_table.clone());
-        }
 
         let index_name = attrs
             .name
@@ -108,7 +93,7 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
             #ident::#variant_name => {
                 IndexDef::new(
                     #index_name.to_string(),
-                    #current_table.to_string(),
+                    <#parent as magritte::prelude::NamedType>::table_name(),
                     #fields,
                     #columns,
                     #overwrite,
@@ -125,11 +110,6 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
         index_names.push(index_name);
         index_defs.push(def);
     }
-
-    let table_name = table_name.expect("Table name must be specified");
-    // Get parent struct name by stripping "Indexes" from enum name
-    let parent_struct_name = strip_indexes_suffix(ident);
-    let parent = format_ident!("{}", parent_struct_name);
 
     let err_type = quote!(magritte::IndexFromStrErr);
     let trait_impls = quote! {
@@ -156,7 +136,7 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
 
         impl #impl_generics magritte::prelude::IndexType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
-                #table_name
+                <#parent as magritte::prelude::NamedType>::table_name()
             }
 
             fn index_name(&self) -> &str {
@@ -194,6 +174,36 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
                 }
             }
         }
+
+        #[automatically_derived]
+        impl #impl_generics ::core::fmt::Debug for #ident #type_generics #where_clause {
+            #[inline]
+            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+                match self {
+                    #(#ident::#index_variants => write!(f, "{}", #index_names),)*
+                }
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics ::core::marker::Copy for #ident #type_generics #where_clause {}
+        #[automatically_derived]
+        impl #impl_generics ::core::clone::Clone for #ident #type_generics #where_clause {
+            #[inline]
+            fn clone(&self) -> #ident #type_generics {
+                *self
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::PartialEq for #ident #type_generics #where_clause {
+            #[inline]
+            fn eq(&self, other: &#ident #type_generics) -> bool {
+                ::core::mem::discriminant(self) == ::core::mem::discriminant(other)
+            }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::cmp::Eq for #ident #type_generics #where_clause {}
     };
 
     Ok(quote! {

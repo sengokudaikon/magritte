@@ -99,13 +99,22 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
 
         #[automatically_derived]
         impl #impl_generics core::convert::AsRef<str> for #ident #type_generics #where_clause {
+            #[inline]
             fn as_ref(&self) -> &str {
                 #table_name_str
             }
         }
         #[automatically_derived]
         impl #impl_generics std::fmt::Display for #ident #type_generics #where_clause {
+            #[inline]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", #table_name_str)
+            }
+        }
+        #[automatically_derived]
+        impl #impl_generics ::core::fmt::Debug for #ident #type_generics #where_clause {
+            #[inline]
+            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 write!(f, "{}", #table_name_str)
             }
         }

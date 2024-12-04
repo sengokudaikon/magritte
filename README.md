@@ -7,7 +7,6 @@
 
 ## Planned Features
 
-- Support for SurrealML
 - Support for SurrealDB scripting
 - Integrated connection pooling
 - Asynchronous event loop for concurrent query execution
