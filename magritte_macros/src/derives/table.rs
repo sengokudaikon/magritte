@@ -5,7 +5,7 @@ use crate::derives::expr_array_to_vec;
 use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::DeriveInput;
+use syn::{DeriveInput, Fields, FieldsNamed};
 
 pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
@@ -65,7 +65,36 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     };
 
     let err_type = quote!(magritte::TableFromStrErr);
+    let data = match &input.data {
+        syn::Data::Struct(data) => data,
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "Table can only be derived for structs",
+            ));
+        }
+    };
 
+    let fields = match &data.fields {
+        Fields::Named(FieldsNamed { named, .. }) => named,
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "Table can only be derived for structs with named fields",
+            ));
+        }
+    };
+
+    let has_id_field = fields.iter().any(|field| {
+        field.ident.as_ref().map_or(false, |ident| ident.to_string().to_lowercase() == "id")
+    });
+
+    if !has_id_field {
+        return Err(syn::Error::new_spanned(
+            input,
+            "Table must have an 'id' field. Please implement the HasId trait manually.",
+        ));
+    }
     // Generate column enum and its implementations
     let column_impl = expand_derive_column(input.clone())?;
 

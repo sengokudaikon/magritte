@@ -7,6 +7,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::{FromTarget, RangeTarget, RecordType, ReturnType, Returns, SurrealId};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -14,11 +15,6 @@ use serde::Serialize;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::{error, info, instrument};
-
-use crate::backend::QueryBuilder;
-use crate::query_result::FromTarget;
-use crate::returns::Returns;
-use crate::types::{NamedType, RangeTarget, RecordType, ReturnType, SurrealId, TableType};
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -32,7 +28,7 @@ pub enum Content {
 #[derive(Clone, Debug)]
 pub struct CreateStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     pub(crate) with_id: Option<String>,
     pub(crate) with_range: Option<RangeTarget>,
@@ -48,7 +44,7 @@ where
 }
 impl<T> CreateStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     pub fn with_id(mut self, id: &str) -> Self {
         self.with_id = Some(id.to_string());
@@ -122,23 +118,9 @@ where
         self.version = Some(format!("d'{}'", timestamp));
         self
     }
-}
 
-impl<T> Returns for CreateStatement<T>
-where
-    T: RecordType
-{
-    fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
-        &mut self.return_type
-    }
-}
-#[async_trait]
-impl<T> QueryBuilder<T> for CreateStatement<T>
-where
-    T: RecordType
-{
     #[instrument(skip_all)]
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             with_id: None,
             with_range: None,
@@ -240,5 +222,14 @@ where
                 Err(anyhow!(e))
             }
         }
+    }
+}
+
+impl<T> Returns for CreateStatement<T>
+where
+    T: RecordType,
+{
+    fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
+        &mut self.return_type
     }
 }

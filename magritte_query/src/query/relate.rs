@@ -6,15 +6,11 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
-
-use crate::backend::QueryBuilder;
-use crate::returns::Returns;
-use crate::types::{RecordType, ReturnType, TableType};
-use crate::SurrealDB;
+use crate::{RecordType, ReturnType, Returns, SurrealDB};
 
 /// Builder for RELATE statements
 #[derive(Clone, Debug, PartialEq)]
-pub struct RelateStatement<T> {
+pub struct RelateStatement {
     from_record: String,
     to_record: String,
     edge_table: String,
@@ -25,15 +21,57 @@ pub struct RelateStatement<T> {
     return_fields: Option<Vec<String>>,
     timeout: Option<Duration>,
     parallel: bool,
-    phantom: PhantomData<T>,
 }
 
-#[async_trait]
-impl<T> QueryBuilder<T> for RelateStatement<T>
-where
-    T: RecordType
+impl RelateStatement
 {
-    fn new() -> Self {
+    /// Set ONLY flag for single relation
+    pub fn only(mut self) -> Self {
+        self.only = true;
+        self
+    }
+
+    /// Set content for the relation
+    pub fn content<V: Serialize>(mut self, content: V) -> anyhow::Result<Self> {
+        self.content = Some(serde_json::to_value(content)?);
+        Ok(self)
+    }
+
+    /// Set a field value
+    pub fn set<V: Serialize>(mut self, field: &str, value: V) -> anyhow::Result<Self> {
+        self.set_fields
+            .push((field.to_string(), serde_json::to_value(value)?));
+        Ok(self)
+    }
+
+    /// Add timeout duration
+    pub fn timeout(mut self, duration: Duration) -> Self {
+        self.timeout = Some(duration);
+        self
+    }
+
+    /// Enable parallel processing
+    pub fn parallel(mut self) -> Self {
+        self.parallel = true;
+        self
+    }
+
+    pub fn from_record(mut self, record: &str) -> Self {
+        self.from_record = record.to_string();
+        self
+    }
+
+    pub fn to_record(mut self, record: &str) -> Self {
+        self.to_record = record.to_string();
+        self
+    }
+
+    pub fn edge_table(mut self, table: &str) -> Self {
+        self.edge_table = table.to_string();
+        self
+    }
+
+    pub fn new() -> Self {
         Self {
             from_record: String::new(),
             to_record: String::new(),
@@ -45,11 +83,10 @@ where
             return_fields: None,
             timeout: None,
             parallel: false,
-            phantom: PhantomData,
         }
     }
 
-    fn build(&self) -> Result<String> {
+    pub fn build(&self) -> Result<String> {
         let mut query = String::new();
 
         // Basic RELATE structure
@@ -107,7 +144,7 @@ where
         Ok(query)
     }
 
-    async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<T>> {
+    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
         let query = self.build()?;
         let surreal_query = conn.query(query);
 
@@ -120,45 +157,7 @@ where
     }
 }
 
-impl<T> RelateStatement<T>
-where
-    T: RecordType
-{
-    /// Set ONLY flag for single relation
-    pub fn only(mut self) -> Self {
-        self.only = true;
-        self
-    }
-
-    /// Set content for the relation
-    pub fn content<V: Serialize>(mut self, content: V) -> anyhow::Result<Self> {
-        self.content = Some(serde_json::to_value(content)?);
-        Ok(self)
-    }
-
-    /// Set a field value
-    pub fn set<V: Serialize>(mut self, field: &str, value: V) -> anyhow::Result<Self> {
-        self.set_fields
-            .push((field.to_string(), serde_json::to_value(value)?));
-        Ok(self)
-    }
-
-    /// Add timeout duration
-    pub fn timeout(mut self, duration: Duration) -> Self {
-        self.timeout = Some(duration);
-        self
-    }
-
-    /// Enable parallel processing
-    pub fn parallel(mut self) -> Self {
-        self.parallel = true;
-        self
-    }
-}
-
-impl<T> Returns for RelateStatement<T>
-where
-    T: RecordType
+impl Returns for RelateStatement
 {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type

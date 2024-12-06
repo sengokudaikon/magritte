@@ -2,8 +2,9 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use crate::vector_search::{VectorDistance, VectorType};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum IndexSpecifics {
+    #[default]
     None,
     Search {
         analyzer: Option<String>,

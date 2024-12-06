@@ -1,32 +1,8 @@
 use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
-
-// Test table with nested columns and relationships
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "products")]
-pub struct Product {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "string")]
-    name: String,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    price: f64,
-}
-
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "users")]
-pub struct UserModel {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "string")]
-    name: String,
-
-    #[column(type = "string")]
-    email: String,
-}
+use pretty_assertions::assert_eq;
+use super::Product;
+use super::User;
 
 // Test index for Product table
 #[derive(Index, Serialize, Deserialize,strum::EnumIter)]
@@ -49,7 +25,7 @@ pub enum ProductIndexes {
 
 // Test index for UserModel table
 #[derive(Index, Serialize, Deserialize,strum::EnumIter)]
-pub enum UserModelIndexes {
+pub enum UserIndexes {
     #[index(
         name = "email_idx",
         columns = [email],
@@ -93,8 +69,8 @@ fn test_product_indexes_derive() {
 #[test]
 fn test_user_model_indexes_derive() {
     // Test EmailIdx
-    let email_idx = UserModelIndexes::EmailIdx;
-    assert_eq!(UserModelIndexes::table_name(), "users");
+    let email_idx = UserIndexes::EmailIdx;
+    assert_eq!(UserIndexes::table_name(), "users");
     assert_eq!(email_idx.index_name(), "email_idx");
     assert_eq!(email_idx.def().fields(), None);
     assert_eq!(email_idx.def().columns(), Some(vec!["email"]));
@@ -103,8 +79,8 @@ fn test_user_model_indexes_derive() {
     assert_eq!(email_idx.def().is_concurrent(), false);
 
     // Test NameIdx
-    let name_idx = UserModelIndexes::NameIdx;
-    assert_eq!(UserModelIndexes::table_name(), "users");
+    let name_idx = UserIndexes::NameIdx;
+    assert_eq!(UserIndexes::table_name(), "users");
     assert_eq!(name_idx.index_name(), "name_idx");
     assert_eq!(name_idx.def().fields(), Some(vec!["name"]));
     assert_eq!(name_idx.def().columns(), None);
@@ -152,7 +128,7 @@ fn test_index_statements() {
     assert!(name_idx_stmt.contains("CONCURRENTLY"));
 
     // Test EmailIdx statement
-    let email_idx_stmt = match UserModelIndexes::EmailIdx.to_statement() {
+    let email_idx_stmt = match UserIndexes::EmailIdx.to_statement() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
@@ -169,7 +145,7 @@ fn test_index_statements() {
     assert!(!email_idx_stmt.contains("CONCURRENTLY"));
 
     // Test NameIdx statement
-    let name_idx_stmt = match UserModelIndexes::NameIdx.to_statement() {
+    let name_idx_stmt = match UserIndexes::NameIdx.to_statement() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
@@ -194,9 +170,9 @@ fn test_index_enum_iteration() {
     assert!(product_indexes.contains(&ProductIndexes::PriceIdx));
     assert!(product_indexes.contains(&ProductIndexes::NameIdx));
 
-    // Test UserModelIndexes iteration
-    let user_model_indexes: Vec<_> = UserModel::indexes().collect();
+    // Test UserIndexes iteration
+    let user_model_indexes: Vec<_> = User::indexes().collect();
     assert_eq!(user_model_indexes.len(), 2);
-    assert!(user_model_indexes.contains(&UserModelIndexes::EmailIdx));
-    assert!(user_model_indexes.contains(&UserModelIndexes::NameIdx));
+    assert!(user_model_indexes.contains(&UserIndexes::EmailIdx));
+    assert!(user_model_indexes.contains(&UserIndexes::NameIdx));
 }

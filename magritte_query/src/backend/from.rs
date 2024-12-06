@@ -1,8 +1,9 @@
-use crate::backend::QueryBuilder;
+
 use crate::query_result::{FromTarget, QueryResult};
 use crate::types::{RecordType, SurrealId};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use crate::SelectStatement;
 
 pub trait FromClause<T>
 where
@@ -37,7 +38,7 @@ where
     }
 
     /// Add a FROM target that is a subquery
-    fn from_subquery<QB: QueryBuilder<T>>(mut self, subquery: QB) -> anyhow::Result<Self>
+    fn from_subquery(mut self, subquery: SelectStatement<T>) -> anyhow::Result<Self>
     where
         Self: Sized,
     {

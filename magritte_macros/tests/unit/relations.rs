@@ -1,78 +1,9 @@
 use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
-
-// Test table with nested columns and relationships
-#[derive(Table, Clone, Serialize, Deserialize)]
-#[table(name = "orders")]
-pub struct Order {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "datetime")]
-    created_at: String,
-
-    #[column(type = "record<users>", assert = "value != NONE")]
-    user: RecordRef<User>,
-
-    #[column(type = "array<record<products>>")]
-    items: Vec<RecordRef<Product>>,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    total: f64,
-
-    #[column(type = "object", flexible)]
-    shipping_info: serde_json::Value,
-    #[column(value = "pending|processing|shipped|delivered")]
-    status: String,
-}
-
-#[derive(Table, Clone, Serialize, Deserialize)]
-#[table(name = "users")]
-pub struct User {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "string")]
-    name: String,
-
-    #[column(type = "string")]
-    email: String,
-}
-
-#[derive(Table, Clone, Serialize, Deserialize)]
-#[table(name = "products")]
-pub struct Product {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "string")]
-    name: String,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    price: f64,
-}
-
-// Test edge between Order and Product
-#[derive(Edge, Clone, Serialize, Deserialize)]
-#[edge(name = "order_product", from = Order, to = Product, schema = "SCHEMALESS", enforced)]
-pub struct OrderProduct {
-    #[column(type = "datetime")]
-    created_at: String,
-
-    #[column(type = "string")]
-    quantity: String,
-}
-
-// Test edge between User and Order
-#[derive(Edge, Clone, Serialize, Deserialize)]
-#[edge(name = "user_order", from = User, to = Order, schema = "SCHEMAFULL")]
-pub struct UserOrder {
-    #[column(type = "datetime")]
-    created_at: String,
-
-    #[column(type = "string")]
-    note: String,
-}
+use pretty_assertions::assert_eq;
+use super::{Order, Product, User};
+use super::edge::OrderProduct;
+use super::edge::UserOrder;
 
 // Test relations for Order and Product
 #[derive(Relation, Serialize, Deserialize, strum::EnumIter)]

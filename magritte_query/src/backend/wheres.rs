@@ -1,9 +1,8 @@
 use crate::backend::value::SqlValue;
-use crate::backend::QueryBuilder;
 use crate::conditions::Operator;
 use crate::expr::{HasConditions, HasParams};
 use crate::types::{SurrealId, TableType};
-use crate::Callable;
+use crate::{Callable, RecordType, SelectStatement};
 use anyhow::anyhow;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -17,9 +16,9 @@ pub trait WhereClause: Sized {
         value: Option<V>,
     ) -> anyhow::Result<Self>
     ;
-    fn where_in<U, QB: QueryBuilder<U>>(self, field: &str, subquery: QB) -> anyhow::Result<Self>
+    fn where_in<U>(self, field: &str, subquery: SelectStatement<U>) -> anyhow::Result<Self>
     where
-        U: TableType + Serialize + DeserializeOwned;
+        U: RecordType;
     fn where_function<F: Callable>(self, func: F) -> anyhow::Result<Self>;
 }
 
@@ -48,9 +47,9 @@ impl<T: HasConditions + HasParams> WhereClause for T {
 
     /// Add a WHERE IN subquery clause
     #[instrument(skip_all)]
-    fn where_in<U, QB: QueryBuilder<U>>(mut self, field: &str, subquery: QB) -> anyhow::Result<Self>
+    fn where_in<U>(mut self, field: &str, subquery: SelectStatement<U>) -> anyhow::Result<Self>
     where
-        U: TableType + Serialize + DeserializeOwned,
+        U: RecordType,
     {
         let subquery_str = format!("{} IN ({})", field, subquery.build()?);
         self.conditions_mut()

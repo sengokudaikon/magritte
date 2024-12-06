@@ -1,5 +1,4 @@
-use crate::backend::QueryBuilder;
-use crate::define::table::define::DefineStatement;
+use crate::define::table::define_table::DefineTableStatement;
 use crate::query::alter::AlterStatement;
 use crate::query::delete::DeleteStatement;
 use crate::query::update::UpdateStatement;
@@ -8,7 +7,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::marker::PhantomData;
 
-pub mod define;
+pub mod define_table;
+pub mod define_edge;
 
 /// Helper for constructing any Table statement
 #[derive(Debug)]
@@ -19,7 +19,7 @@ pub struct Table<T> {
 /// All available types of Table statement
 #[derive(Debug, Clone)]
 pub enum TableStatement<T>  where T:RecordType{
-    Define(DefineStatement),
+    Define(DefineTableStatement<T>),
     Alter(AlterStatement),
     Delete(DeleteStatement<T>),
     Update(UpdateStatement<T>),
@@ -28,8 +28,8 @@ pub enum TableStatement<T>  where T:RecordType{
 impl<T> Table<T>
 where T:RecordType
 {
-    pub fn define() -> DefineStatement {
-        DefineStatement::new()
+    pub fn define() -> DefineTableStatement<T> {
+        DefineTableStatement::new()
     }
     pub fn alter() -> AlterStatement {
         AlterStatement::new()
@@ -48,7 +48,7 @@ where T:RecordType
     /// Build corresponding SQL statement for certain database backend and return SQL string
     pub fn build(&self) -> anyhow::Result<String> {
         match self {
-            Self::Define(stat) => <DefineStatement as QueryBuilder<T>>::build(stat),
+            Self::Define(stat) => stat.build(),
             Self::Alter(stat) => stat.build(),
             Self::Delete(stat) => stat.build(),
             Self::Update(stat) => stat.build(),

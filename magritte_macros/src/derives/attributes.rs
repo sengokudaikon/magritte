@@ -508,7 +508,13 @@ pub struct Edge {
     #[deluxe(default)]
     pub drop: bool,
     #[deluxe(default)]
+    pub changefeed: Option<String>,
+    #[deluxe(default)]
+    pub include_original: bool,
+    #[deluxe(default)]
     pub comment: Option<String>,
+    #[deluxe(default)]
+    pub as_select: Option<AsSelect>,
 }
 
 impl ToTokens for Edge {
@@ -523,7 +529,10 @@ impl ToTokens for Edge {
             overwrite,
             if_not_exists,
             drop,
+            changefeed,
+            include_original,
             comment,
+            as_select,
         } = self;
 
         let expanded = quote! {
@@ -538,6 +547,9 @@ impl ToTokens for Edge {
                 if_not_exists: #if_not_exists,
                 drop: #drop,
                 comment: #comment,
+                changefeed: #changefeed,
+                include_original: #include_original,
+                as_select: #as_select
             }
         };
         tokens.extend(expanded);

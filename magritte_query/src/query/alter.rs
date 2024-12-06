@@ -1,9 +1,9 @@
+use crate::{Permission, SchemaType};
 use anyhow::Result;
 use std::sync::Arc;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::instrument;
-use crate::types::{Permission, SchemaType};
 
 /// ALTER query builder with allowed method chains
 #[derive(Clone, Debug)]
@@ -15,7 +15,6 @@ pub struct AlterStatement {
     permissions: Vec<Permission>,
     comment: Option<String>,
 }
-
 
 impl AlterStatement {
     /// Specify Table to alter
@@ -135,10 +134,7 @@ impl AlterStatement {
 
     /// Execute the ALTER query
     #[instrument(skip_all)]
-    async fn execute<T>(
-        self,
-        conn: Arc<Surreal<Any>>,
-    ) -> Result<Vec<T>> {
+    async fn execute<T>(self, conn: Arc<Surreal<Any>>) -> Result<Vec<T>> {
         let query = self.build()?;
         conn.query(query).await?.check()?;
         Ok(vec![])

@@ -81,6 +81,13 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
 
     let err_type = quote!(magritte::RelationFromStrErr);
     let trait_impls = quote! {
+        impl #impl_generics magritte::prelude::HasRelations for #parent #type_generics #where_clause {
+            pub fn relations() -> impl Iterator<Item = #ident #type_generics> {
+                use strum::IntoEnumIterator;
+                #ident::iter()
+            }
+        }
+
         #[automatically_derived]
         impl #impl_generics magritte::prelude::RelationTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;

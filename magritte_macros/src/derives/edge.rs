@@ -5,6 +5,7 @@ use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput};
+use syn::parse::Parser;
 
 pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
@@ -52,7 +53,26 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let if_not_exists = attrs.if_not_exists;
     let drop = attrs.drop;
     let enforced = attrs.enforced;
+    let comment = if let Some(comment) = &attrs.comment {
+        quote!(Some(#comment.to_string()))
+    } else {
+        quote!(None)
+    };
 
+    let as_select = if let Some(as_select) = &attrs.as_select {
+        let query = as_select.to_string();
+        quote!(Some(#query.to_string()))
+    } else {
+        quote!(None)
+    };
+
+    let changefeed = if let Some(duration) = &attrs.changefeed {
+        let duration: u64 = duration.parse().unwrap();
+        let include_original = attrs.include_original;
+        quote!(Some((#duration, #include_original)))
+    } else {
+        quote!(None)
+    };
     // Generate column enum and its implementations
     let column_impl = expand_derive_column(input.clone())?;
     let def = quote! {
@@ -65,7 +85,10 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
                     #overwrite,
                     #if_not_exists,
                     #drop,
-                    #enforced
+                    #enforced,
+                    #as_select,
+                    #changefeed,
+                    #comment,
                 )
     };
     Ok(quote! {

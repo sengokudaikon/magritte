@@ -1,38 +1,39 @@
-use std::marker::PhantomData;
-use crate::backend::QueryBuilder;
-use crate::query::info::InfoStatement;
-use crate::query::insert::InsertStatement;
-use crate::query::relate::RelateStatement;
-use crate::query::select::SelectStatement;
-use crate::query::update::UpdateStatement;
-use crate::query::upsert::UpsertStatement;
-use std::sync::Arc;
+use crate::RecordType;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use surrealdb::Surreal;
-use crate::query::alter::AlterStatement;
-use crate::query::create::CreateStatement;
-use crate::query::delete::DeleteStatement;
-use crate::types::{RecordType, TableType};
-
-pub mod info;
-pub mod insert;
-pub mod relate;
+use std::marker::PhantomData;
 pub mod alter;
 pub mod create;
 pub mod delete;
+pub mod info;
+pub mod insert;
+pub mod relate;
 pub mod select;
 pub mod update;
 pub mod upsert;
+
+pub use alter::*;
+pub use create::*;
+pub use delete::*;
+pub use info::*;
+pub use insert::*;
+pub use relate::*;
+pub use select::*;
+pub use update::*;
+pub use upsert::*;
+
 /// Shorthand for constructing any Table query
 #[derive(Debug, Clone)]
 pub struct Query<T> {
-    phantom_data: PhantomData<T>
+    phantom_data: PhantomData<T>,
 }
 
 /// All available types of Table query
 #[derive(Debug, Clone)]
-pub enum QueryStatement<T> where T:RecordType {
+pub enum QueryStatement<T>
+where
+    T: RecordType,
+{
     Select(SelectStatement<T>),
     Create(CreateStatement<T>),
     Alter(AlterStatement),
@@ -45,7 +46,10 @@ pub enum QueryStatement<T> where T:RecordType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum SubQueryStatement<T> where T:RecordType {
+pub enum SubQueryStatement<T>
+where
+    T: RecordType,
+{
     SelectStatement(SelectStatement<T>),
     InsertStatement(InsertStatement<T>),
     UpdateStatement(UpdateStatement<T>),
@@ -54,9 +58,9 @@ pub enum SubQueryStatement<T> where T:RecordType {
     RelateStatement(RelateStatement<T>),
 }
 
-impl <T>Query<T>
+impl<T> Query<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     /// CREATE statement [`CreateStatement`]
     pub fn create() -> CreateStatement<T> {
@@ -64,7 +68,9 @@ where
     }
 
     /// ALTER statement [`AlterStatement`]
-    pub fn alter() -> AlterStatement { AlterStatement::new() }
+    pub fn alter() -> AlterStatement {
+        AlterStatement::new()
+    }
     /// SELECT statement [`SelectStatement`]
     pub fn select() -> SelectStatement<T> {
         SelectStatement::new()
@@ -73,6 +79,11 @@ where
     /// INSERT statement [`InsertStatement`]
     pub fn insert() -> InsertStatement<T> {
         InsertStatement::new()
+    }
+
+    /// RELATE statement [`RelateStatement`]
+    pub fn relate() -> RelateStatement<T> {
+        RelateStatement::new()
     }
 
     /// UPDATE statement [`UpdateStatement`]

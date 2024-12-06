@@ -1,5 +1,6 @@
 use magritte_query::types::{ColumnType, NamedType, Permission};
 use std::fmt::Display;
+use magritte_query::{Define, DefineFieldStatement};
 
 /// Defines a Column for an Entity
 #[derive(Debug, Clone, PartialEq)]
@@ -21,7 +22,7 @@ pub trait ColumnTrait: ColumnType {
     type EntityName: NamedType;
 
     fn def(&self) -> ColumnDef;
-    fn to_statement(&self, table_name: &str) -> String {
+    fn to_statement(&self) -> DefineFieldStatement {
         self.def().to_statement()
     }
 }
@@ -97,51 +98,41 @@ impl ColumnDef {
         self.assert.as_ref().map(|a| a.as_str())
     }
 
-    pub fn to_statement(&self) -> String {
-        if self.name == "id" {
-            return "".to_string();
-        }
-        let mut stmt = format!("DEFINE FIELD {} ON TABLE {}", self.name, self.table_name);
-
-        if self.flexible {
-            stmt.push_str(" FLEXIBLE");
-        }
-        stmt.push_str(&format!("TYPE {}", self.col_type));
+    pub fn to_statement<T: ColumnTrait> (&self) -> DefineFieldStatement {
+        let mut def = Define::field();
+        def = def.name(self.name.clone());
+        def = def.table_name(self.table_name.clone());
+        def = def.column_type(self.col_type.clone());
 
         if self.null {
-            stmt.push_str("|null ");
+            def = def.null();
+        }
+        if let Some(default) = self.default.clone() {
+            def = def.default(default);
         }
 
-        if let Some(default) = &self.default {
-            stmt.push_str(&format!(" DEFAULT {}", default));
+        if let Some(assert) = self.assert.clone() {
+            def = def.assert(assert);
         }
 
-        if let Some(assert) = &self.assert {
-            stmt.push_str(&format!(" ASSERT {}", assert));
+        if let Some(permissions) = self.permissions.clone() {
+            def = def.permissions(permissions);
         }
 
-        if let Some(value) = &self.value {
-            stmt.push_str(&format!(" VALUE {}", value));
-        }
-
-        if let Some(permissions) = &self.permissions {
-            if !permissions.is_empty() {
-                stmt.push_str(" PERMISSIONS ");
-                for perms in permissions {
-                    stmt.push_str(format!("{}", perms).as_str());
-                }
-            }
+        if let Some(value) = self.value.clone() {
+            def = def.value(value);
         }
 
         if self.readonly {
-            stmt.push_str(" READONLY");
+            def = def.readonly();
         }
 
-        if let Some(comment) = &self.comment {
-            stmt.push_str(&format!(" COMMENT \"{}\"", comment));
+        if self.flexible {
+            def = def.flexible();
         }
-
-        stmt.push(';');
-        stmt
+        if let Some(comment) = self.comment.clone() {
+            def = def.comment(comment);
+        }
+        def
     }
 }

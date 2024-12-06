@@ -1,9 +1,7 @@
-use anyhow::bail;
-use anyhow::Result;
-use std::fmt::{Debug, Display};
-use std::str::FromStr;
 use crate::prelude::IndexSpecifics;
-use magritte_query::types::{IndexType, TableType};
+use magritte_query::types::IndexType;
+use magritte_query::{Define, DefineIndexStatement, NamedType};
+use std::fmt::{Debug, Display};
 
 /// Defines an Index for a Table
 #[derive(Debug, Clone, PartialEq)]
@@ -11,7 +9,6 @@ pub struct IndexDef {
     pub(crate) name: String,
     pub(crate) table: String,
     pub(crate) overwrite: bool,
-    pub(crate) use_table: bool,
     pub(crate) if_not_exists: bool,
     pub(crate) fields: Option<Vec<String>>,
     pub(crate) columns: Option<Vec<String>>,
@@ -22,11 +19,11 @@ pub struct IndexDef {
 }
 
 pub trait IndexTrait: IndexType {
-    type EntityName: TableType;
+    type EntityName: NamedType;
 
     fn def(&self) -> IndexDef;
 
-    fn to_statement(&self) -> Result<String> {
+    fn to_statement(&self) -> DefineIndexStatement {
         self.def().to_statement()
     }
 }
@@ -38,7 +35,6 @@ impl IndexDef {
         fields: Option<Vec<String>>,
         columns: Option<Vec<String>>,
         overwrite: bool,
-        use_table: bool,
         if_not_exists: bool,
         unique: bool,
         specifics: String,
@@ -49,7 +45,6 @@ impl IndexDef {
             name: name.into(),
             table: table.into(),
             overwrite,
-            use_table,
             if_not_exists,
             fields,
             columns,
@@ -94,55 +89,36 @@ impl IndexDef {
     pub fn comment(&self) -> Option<&str> {
         self.comment.as_ref().map(|c| c.as_str())
     }
-    pub fn to_statement(&self) -> anyhow::Result<String> {
-        let mut stmt = String::new();
-        stmt.push_str("DEFINE INDEX ");
+    pub fn to_statement(&self) -> DefineIndexStatement {
+        let mut def = Define::index()
+            .name(self.name.clone())
+            .table(self.table.clone());
+
         if self.overwrite {
-            stmt.push_str("OVERWRITE ");
+            def = def.overwrite();
         } else if self.if_not_exists {
-            stmt.push_str("IF NOT EXISTS ");
+            def = def.if_not_exists();
         }
-        stmt.push_str(&*self.name);
-
-        stmt.push_str(" ON ");
-        if self.use_table {
-            stmt.push_str("TABLE ");
-        }
-        stmt.push_str(&*self.table);
-
-        if let Some(fields) = &self.fields {
-            stmt.push_str(" FIELDS ");
-            if fields.len() == 1 {
-                stmt.push_str(fields.first().unwrap().as_str());
-            } else if fields.len() > 1 {
-                stmt.push_str(fields.join(", ").as_str());
-            }
-        } else if let Some(columns) = &self.columns {
-            stmt.push_str(" COLUMNS ");
-            if columns.len() == 1 {
-                stmt.push_str(columns.first().unwrap().as_str());
-            } else if columns.len() > 1 {
-                stmt.push_str(columns.join(", ").as_str());
-            }
-        } else {
-            bail!("No fields or columns provided")
-        }
-
-        stmt.push_str(self.specifics.to_string().as_str());
 
         if self.unique {
-            stmt.push_str(" UNIQUE");
-        }
-
-        if let Some(comment) = &self.comment {
-            stmt.push_str(&format!(" COMMENT \"{}\"", comment));
+            def = def.unique();
         }
 
         if self.concurrently {
-            stmt.push_str(" CONCURRENTLY");
+            def = def.concurrently();
         }
 
-        stmt.push(';');
-        Ok(stmt)
+        def = def.specifics(self.specifics.clone());
+
+        if let Some(fields) = &self.fields {
+            def = def.fields(fields.clone());
+        }
+        if let Some(columns) = &self.columns {
+            def = def.columns(columns.clone());
+        }
+        if let Some(comment) = &self.comment {
+            def = def.comment(comment.clone());
+        }
+        def
     }
 }

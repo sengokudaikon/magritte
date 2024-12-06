@@ -1,61 +1,16 @@
 use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
+use pretty_assertions::assert_eq;
+use super::User;
+use super::Order;
+use super::Product;
 
-// Test table with nested columns and relationships
-#[derive(Table, Serialize, Deserialize, Clone)]
-#[table(name = "orders")]
-pub struct Order {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "datetime")]
-    created_at: String,
-
-    #[column(type = "record<users>", assert = "value != NONE")]
-    user: RecordRef<UserModel>,
-
-    #[column(type = "array<record<products>>")]
-    items: Vec<RecordRef<Product>>,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    total: f64,
-
-    #[column(type = "object", flexible)]
-    shipping_info: serde_json::Value,
-    #[column(value = "pending|processing|shipped|delivered")]
-    status: String,
-}
-
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "users")]
-pub struct UserModel {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "string")]
-    name: String,
-
-    #[column(type = "string")]
-    email: String,
-}
-
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "products")]
-pub struct Product {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "string")]
-    name: String,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    price: f64,
-}
 
 // Test edge between Order and Product
 #[derive(Edge, Serialize, Deserialize,  Clone)]
 #[edge(name = "order_product", from = Order, to = Product, schema = "SCHEMALESS", enforced = true)]
 pub struct OrderProduct {
+    id: SurrealId<Self>,
     #[column(type = "datetime")]
     created_at: String,
 
@@ -63,10 +18,17 @@ pub struct OrderProduct {
     quantity: String,
 }
 
+impl HasId for OrderProduct {
+    fn id(&self) -> SurrealId<Self> {
+        self.id.clone()
+    }
+}
+
 // Test edge between User and Order
 #[derive(Edge, Serialize, Deserialize,  Clone)]
-#[edge(from = UserModel, to = Order, if_not_exists)]
+#[edge(from = User, to = Order, if_not_exists)]
 pub struct UserOrder {
+    id: SurrealId<Self>,
     #[column(type = "datetime")]
     created_at: String,
 
@@ -74,10 +36,17 @@ pub struct UserOrder {
     note: String,
 }
 
+impl HasId for UserOrder {
+    fn id(&self) -> SurrealId<Self> {
+        self.id.clone()
+    }
+}
+
 #[test]
 fn test_order_product_edge_derive() {
     // Test OrderProductEdge
     let edge = OrderProduct {
+        id: "1".into(),
         created_at: "2023-01-01T00:00:00Z".to_string(),
         quantity: "1".to_string(),
     };
@@ -98,6 +67,7 @@ fn test_order_product_edge_derive() {
 fn test_user_order_edge_derive() {
     // Test UserOrderEdge
     let edge = UserOrder {
+        id: "1".into(),
         created_at: "2023-01-01T00:00:00Z".to_string(),
         note: "Special order".to_string(),
     };
@@ -153,6 +123,7 @@ fn test_edge_columns() {
 impl OrderProduct {
     fn new() -> Self {
         Self {
+            id: "1".into(),
             created_at: "2023-01-01T00:00:00Z".to_string(),
             quantity: "1".to_string(),
         }
@@ -162,6 +133,7 @@ impl OrderProduct {
 impl UserOrder {
     fn new() -> Self {
         Self {
+            id: "1".into(),
             created_at: "2023-01-01T00:00:00Z".to_string(),
             note: "Special order".to_string(),
         }

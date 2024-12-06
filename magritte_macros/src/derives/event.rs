@@ -83,7 +83,7 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
     // Generate the enum and all implementations separately
 
     let trait_impls = quote! {
-        impl #impl_generics #parent #type_generics #where_clause {
+        impl #impl_generics magritte::prelude::HasEvents for #parent #type_generics #where_clause {
             pub fn events() -> impl Iterator<Item = #ident #type_generics> {
                 use strum::IntoEnumIterator;
                 #ident::iter()

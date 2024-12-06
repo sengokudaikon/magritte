@@ -1,80 +1,9 @@
 #[cfg(test)]
 use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
+use pretty_assertions::assert_eq;
+use crate::{Posts, Product, ProductColumns, User};
 
-// Test basic table derive
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "users")]
-pub struct UserModel {
-    pub(crate) id: String,
-    pub(crate) name: String,
-}
-
-impl HasId for UserModel {
-    fn id(&self) -> SurrealId<Self> {
-        SurrealId::new(&self.id)
-    }
-}
-
-// Test table with all possible attributes
-#[derive(Table, Serialize, Deserialize, Clone)]
-#[table(
-        name = "posts",
-        schema = "SCHEMAFULL",
-        permissions = ["full".to_string()],
-        overwrite,
-        comment = "Posts table with all attributes",
-        changefeed = "1",
-        include_original
-    )]
-pub struct Posts {
-    id: String,
-}
-
-impl HasId for Posts {
-    fn id(&self) -> SurrealId<Self> {
-        SurrealId::new(&self.id)
-    }
-}
-
-// Test table with columns and all possible column attributes
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "products", schema = "SCHEMALESS")]
-pub struct Product {
-    // Basic column
-    #[column(type = "string")]
-    name: String,
-
-    // Nullable column with default
-    #[column(type = "int", nullable, default = "0")]
-    quantity: i32,
-
-    // Column with all attributes
-    #[column(
-            type = "float",
-            nullable,
-            default = "0.0",
-            assert = "value >= 0",
-            permissions = ["full".to_string()],
-            readonly,
-            flexible,
-            comment = "Product price with validation"
-        )]
-    price: f64,
-
-    // Required column with assertion
-    #[column(type = "string", assert = "value != NONE")]
-    sku: String,
-
-    // Flexible column
-    #[column(type = "object", flexible = true)]
-    metadata: serde_json::Value,
-}
-impl HasId for Product {
-    fn id(&self) -> SurrealId<Self> {
-        SurrealId::gen_v6()
-    }
-}
 // Test table with as_select
 #[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(
@@ -86,33 +15,36 @@ impl HasId for Product {
 )]
 pub struct ActiveUsers {
     #[column(ignore)]
-    id: String,
+    id: SurrealId<Self>,
     name: String,
 }
-
+impl HasId for ActiveUsers {
+    fn id(&self) -> SurrealId<Self> {
+        self.id.clone()
+    }
+}
 // Test table with generics
 #[derive(Table, Serialize, Deserialize,  Clone)]
 #[table(name = "generic_items")]
 pub struct GenericItem {
-    #[column(type = "string")]
-    id: String,
+    id: SurrealId<Self>,
     data: RecordRef<Product>,
 }
 
 impl HasId for GenericItem {
     fn id(&self) -> SurrealId<Self> {
-        SurrealId::new(&self.id)
+        self.id.clone()
     }
 }
 
 #[test]
 fn test_table_derives() {
     // Basic table
-    let user = UserModel { id: "1".to_string(), name: "John".to_string() };
+    let user = User::new("1", "J", "jdoe@example.com");
     assert_eq!(user.to_string(), "users");
 
     // Full table
-    let post = Posts { id: "1".to_string() };
+    let post = Posts::new("1");
     assert_eq!(Posts::table_name(), "posts");
     let def = post.def();
     assert!(def.is_overwrite());
@@ -123,13 +55,14 @@ fn test_table_derives() {
     assert!(def.changefeed().is_some());
 
     // Table with as_select
-    let active_users = ActiveUsers { id: "1".to_string(), name: "John".to_string() };
+    let active_users = ActiveUsers { id: "1".into(), name: "John".to_string() };
     let def = active_users.def();
     assert_eq!(
         def.as_select(),
         Some("* FROM users WHERE active == true")
     );
     let product = Product {
+        id: "1".into(),
         name: "".to_string(),
         quantity: 0,
         price: 0.0,
@@ -138,7 +71,7 @@ fn test_table_derives() {
     };
     // Generic table
     GenericItem {
-        id: "1".to_string(),
+        id: "1".into(),
         data: product.as_record()
     };
     assert_eq!(

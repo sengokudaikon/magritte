@@ -1,19 +1,15 @@
-use std::marker::PhantomData;
-use std::time::Duration;
+use crate::{
+    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns,
+    SqlValue, SurrealDB, SurrealId,
+};
 use anyhow::anyhow;
-use crate::backend::QueryBuilder;
-use crate::types::{RecordType, ReturnType, TableType};
-use crate::{HasConditions, HasParams, SqlValue, SurrealDB};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
+use std::marker::PhantomData;
+use std::time::Duration;
 use tracing::{error, info, instrument};
-use crate::conditions::Operator;
-use crate::create::CreateStatement;
-use crate::query_result::FromTarget;
-use crate::returns::Returns;
-use crate::select::SelectStatement;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -26,8 +22,12 @@ pub enum Content {
     Replace(Vec<(String, Option<serde_json::Value>)>),
 }
 #[derive(Clone, Debug, PartialEq)]
-pub struct UpsertStatement<T> where T:RecordType {
+pub struct UpsertStatement<T>
+where
+    T: RecordType,
+{
     pub(crate) targets: Option<Vec<FromTarget<T>>>,
+    pub(crate) with_id: Option<SurrealId<T>>,
     pub(crate) only: bool,
     pub(crate) content: Option<Content>,
     pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
@@ -38,12 +38,19 @@ pub struct UpsertStatement<T> where T:RecordType {
     _marker: PhantomData<T>,
 }
 
-impl<T> UpsertStatement <T> where T: RecordType {
+impl<T> UpsertStatement<T>
+where
+    T: RecordType,
+{
     #[instrument(skip_all)]
-    pub fn content<C: Serialize>(mut self, content: C) -> anyhow::Result<Self>
-    {
+    pub fn content<C: Serialize>(mut self, content: C) -> anyhow::Result<Self> {
         self.content = Some(Content::Content(serde_json::to_value(content)?));
         Ok(self)
+    }
+
+    pub fn where_id(mut self, id: SurrealId<T>) -> Self {
+        self.with_id = Some(id);
+        self
     }
 
     /// Add a MERGE operation for UPSERT
@@ -60,15 +67,13 @@ impl<T> UpsertStatement <T> where T: RecordType {
     }
 
     #[instrument(skip_all)]
-    pub fn replace<V: Serialize>(mut self, replacements: impl IntoIterator<Item = (String, Option<V>)>) -> anyhow::Result<Self> {
+    pub fn replace<V: Serialize>(
+        mut self,
+        replacements: impl IntoIterator<Item = (String, Option<V>)>,
+    ) -> anyhow::Result<Self> {
         let replacements: anyhow::Result<Vec<(String, Option<serde_json::Value>)>> = replacements
             .into_iter()
-            .map(|(field, value)| {
-                Ok((
-                    field,
-                    value.map(|v| serde_json::to_value(v)).transpose()?
-                ))
-            })
+            .map(|(field, value)| Ok((field, value.map(|v| serde_json::to_value(v)).transpose()?)))
             .collect();
 
         match &mut self.content {
@@ -78,45 +83,11 @@ impl<T> UpsertStatement <T> where T: RecordType {
 
         Ok(self)
     }
-}
-impl<T> Returns for UpsertStatement<T>
-where
-    T: RecordType
-{
-    fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
-        &mut self.return_type
-    }
-}
 
-impl<T> HasParams for UpsertStatement<T>
-where
-    T: RecordType
-{
-    fn params(&self) -> &Vec<(String, Value)> {
-        &self.parameters
-    }
-
-    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
-        &mut self.parameters
-    }
-}
-
-impl<T> HasConditions for UpsertStatement<T>
-where
-    T: RecordType
-{
-    fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
-        &mut self.conditions
-    }
-}
-#[async_trait]
-impl<T> QueryBuilder<T> for UpsertStatement<T>
-where
-    T: RecordType
-{
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             targets: None,
+            with_id: None,
             only: false,
             content: None,
             conditions: vec![],
@@ -245,5 +216,35 @@ where
                 Err(anyhow!(e))
             }
         }
+    }
+}
+impl<T> Returns for UpsertStatement<T>
+where
+    T: RecordType,
+{
+    fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
+        &mut self.return_type
+    }
+}
+
+impl<T> HasParams for UpsertStatement<T>
+where
+    T: RecordType,
+{
+    fn params(&self) -> &Vec<(String, Value)> {
+        &self.parameters
+    }
+
+    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
+        &mut self.parameters
+    }
+}
+
+impl<T> HasConditions for UpsertStatement<T>
+where
+    T: RecordType,
+{
+    fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
+        &mut self.conditions
     }
 }

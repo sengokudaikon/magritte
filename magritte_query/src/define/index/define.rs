@@ -1,83 +1,149 @@
-use crate::define::index::TableIndex;
+use std::fmt::Display;
+use anyhow::{anyhow, bail};
+use tracing::{error, info};
+use crate::{EdgeType, IndexSpecifics, SurrealDB};
+use crate::define_edge::DefineEdgeStatement;
 
 #[derive(Default, Debug, Clone)]
-pub struct IndexDefineStatement {
+pub struct DefineIndexStatement {
+    pub(crate) name: Option<String>,
     pub(crate) table: Option<String>,
-    pub(crate) index: TableIndex,
-    pub(crate) index_type: Option<IndexType>,
+    pub(crate) overwrite: bool,
     pub(crate) if_not_exists: bool,
-}
-pub trait IntoIndexColumn {
-    fn into_index_column() -> IndexDefineStatement;
-}
-/// Specification of a Table index
-#[derive(Debug, Clone)]
-pub enum IndexType {
-    Search,
-    Mtree,
-    HNSW,
+    pub(crate) fields: Option<Vec<String>>,
+    pub(crate) columns: Option<Vec<String>>,
+    pub(crate) unique: bool,
+    pub(crate) specifics: IndexSpecifics,
+    pub(crate) comment: Option<String>,
+    pub(crate) concurrently: bool,
 }
 
-impl IndexDefineStatement {
-    /// Construct a new [`IndexDefineStatement`]
+impl DefineIndexStatement {
     pub fn new() -> Self {
-        Self {
-            table: None,
-            index: Default::default(),
-            index_type: None,
-            if_not_exists: false,
-        }
+        Self { table: None, name: None, if_not_exists: false, fields: None, columns: None, unique: false, specifics: Default::default(), comment: None, overwrite: false, concurrently: false }
     }
 
-    /// Define index if index not exists
-    pub fn if_not_exists(&mut self) -> &mut Self {
-        self.if_not_exists = true;
-        self
-    }
-
-    /// Set index name
-    pub fn name<T>(&mut self, name: T) -> &mut Self
-    where
-        T: Into<String>,
-    {
-        self.index.name(name);
-        self
-    }
-
-    pub fn table<T>(&mut self, table: T) -> &mut Self
-    where
-        T: Into<String>,
-    {
+    pub fn table(mut self, table: impl Into<String>) -> Self {
         self.table = Some(table.into());
         self
     }
 
-    pub fn col<C>(&mut self, col: C) -> &mut Self
-    where
-        C: IntoIndexColumn,
-    {
-        self.index.col(col);
-        self
-    }
-    pub fn full_text(&mut self) -> &mut Self {
-        self.index_type(IndexType::Search)
-    }
-
-    pub fn index_type(&mut self, index_type: IndexType) -> &mut Self {
-        self.index_type = Some(index_type);
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
         self
     }
 
-    pub fn get_index_spec(&self) -> &TableIndex {
-        &self.index
+    pub fn fields(mut self, fields: impl Into<Vec<String>>) -> Self {
+        self.fields = Some(fields.into());
+        self
     }
 
-    pub fn take(&mut self) -> Self {
-        Self {
-            table: self.table.take(),
-            index: self.index.take(),
-            index_type: self.index_type.take(),
-            if_not_exists: self.if_not_exists,
+    pub fn columns(mut self, columns: impl Into<Vec<String>>) -> Self {
+        self.columns = Some(columns.into());
+        self
+    }
+
+    pub fn unique(mut self) -> Self {
+        self.unique = true;
+        self
+    }
+
+    pub fn overwrite(mut self) -> Self {
+        self.overwrite = true;
+        self
+    }
+
+    pub fn if_not_exists(mut self) -> Self {
+        self.if_not_exists = true;
+        self
+    }
+
+    pub fn comment(mut self, comment: impl Into<String>) -> Self {
+        self.comment = Some(comment.into());
+        self
+    }
+
+    pub fn specifics(mut self, specifics: impl Into<IndexSpecifics>) -> Self {
+        self.specifics = specifics.into();
+        self
+    }
+
+    pub fn concurrently(mut self) -> Self {
+        self.concurrently = true;
+        self
+    }
+
+    pub fn build(&self) -> anyhow::Result<String> {
+        let mut stmt = String::new();
+        stmt.push_str("DEFINE INDEX ");
+        if self.overwrite {
+            stmt.push_str("OVERWRITE ");
+        } else if self.if_not_exists {
+            stmt.push_str("IF NOT EXISTS ");
         }
+        stmt.push_str(&*self.name);
+
+        stmt.push_str(" ON ");
+
+        stmt.push_str(&*self.table);
+
+        if let Some(fields) = &self.fields {
+            stmt.push_str(" FIELDS ");
+            if fields.len() == 1 {
+                stmt.push_str(fields.first().unwrap().as_str());
+            } else if fields.len() > 1 {
+                stmt.push_str(fields.join(", ").as_str());
+            }
+        } else if let Some(columns) = &self.columns {
+            stmt.push_str(" COLUMNS ");
+            if columns.len() == 1 {
+                stmt.push_str(columns.first().unwrap().as_str());
+            } else if columns.len() > 1 {
+                stmt.push_str(columns.join(", ").as_str());
+            }
+        } else {
+            bail!("No fields or columns provided")
+        }
+
+        stmt.push_str(self.specifics.to_string().as_str());
+
+        if self.unique {
+            stmt.push_str(" UNIQUE");
+        }
+
+        if let Some(comment) = &self.comment {
+            stmt.push_str(&format!(" COMMENT \"{}\"", comment));
+        }
+
+        if self.concurrently {
+            stmt.push_str(" CONCURRENTLY");
+        }
+
+        stmt.push(';');
+        Ok(stmt)
+    }
+
+
+    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        let query = self.build()?;
+        info!("Executing query: {}", query);
+
+        let mut surreal_query = conn.query(query);
+
+        let res = surreal_query.await?.take(0);
+        match res {
+            Ok(res) => Ok(res),
+            Err(e) => {
+                error!("Query execution failed: {:?}", e);
+                Err(anyhow!(e))
+            }
+        }
+    }
+}
+
+
+impl Display for DefineIndexStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.build().unwrap())
     }
 }

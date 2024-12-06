@@ -9,12 +9,11 @@ description = "Derive macros for magritte"
 [lib]
 proc-macro = true
 [dependencies]
-inherent = "1.0.11"
+anyhow = "1.0.94"
 quote = "1"
 proc-macro2 = { version = "1.0",features = ["default"] }
 syn = { version = "2", default-features = false, features = ["parsing", "proc-macro", "derive", "printing"] }
 heck = "0.5.0"
-thiserror = "2.0.3"
 deluxe = { version = "0.5",features = ["full"] }
 strum = { version = "0.26.3", features = ["derive"] }
 magritte_query = {path = "../magritte_query"}
@@ -28,10 +27,11 @@ chrono = { version = "0.4", features = ["serde"], optional = true }
 time = { version = "0.3.36", optional = true }
 serde = "1"
 serde_json = "1"
+tokio = "1.41.1"
 [dev-dependencies]
 magritte= { path = "..", features = ["tests-cfg"] }
 serde = { version = "1.0", features = ["derive"] }
-
+surrealdb = { version = "2.1.2", features = ["kv-mem"] }
 
 [[test]]
 name = "unit"

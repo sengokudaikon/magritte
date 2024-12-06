@@ -3,15 +3,16 @@ use crate::conditions::Operator;
 use crate::graph::Relation;
 use crate::vector_search::VectorCondition;
 use serde_json::Value;
+use crate::types::Projection;
 
 pub trait HasVectorConditions {
     fn get_vector_conditions(&self) -> &Vec<VectorCondition>;
     fn get_vector_conditions_mut(&mut self) -> &mut Vec<VectorCondition>;
 }
 
-pub trait HasRelations {
-    fn relations(&self) -> &Vec<Relation>;
-    fn relations_mut(&mut self) -> &mut Vec<Relation>;
+pub trait HasProjections {
+    fn projections(&self) -> &Vec<Projection>;
+    fn projections_mut(&mut self) -> &mut Vec<Projection>;
 }
 pub trait HasParams {
     fn params(&self) -> &Vec<(String, Value)>;

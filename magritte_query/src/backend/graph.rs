@@ -1,29 +1,41 @@
+use std::fmt::{Display, Formatter};
 use serde::Serialize;
 use serde_json::Value;
 
 use super::conditions::Operator;
-use crate::backend::QueryBuilder;
+use super::types::Projection;
 use crate::backend::value::SqlValue;
-use crate::expr::HasRelations;
+use crate::expr::HasProjections;
+use crate::SelectStatement;
 use crate::types::TableType;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum RelationType {
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RelationDirection {
     In,   // <-
     Out,  // ->
     Both, // <->
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl Display for RelationDirection {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RelationDirection::In => write!(f, "<-"),
+            RelationDirection::Out => write!(f, "->"),
+            RelationDirection::Both => write!(f, "<->"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecursiveDepth {
     Fixed(usize),             // @.{3}
     Range(usize, usize),      // @.{1..5}
     OpenEnded(Option<usize>), // @.{..} or @.{..256}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relation {
-    pub rel_type: RelationType,
+    pub direction: RelationDirection,
     pub edge: String,
     pub target: String,
     pub recursive: Option<RecursiveDepth>,
@@ -36,9 +48,9 @@ pub struct Relation {
 }
 
 impl Relation {
-    pub fn new(rel_type: RelationType, edge: &str, target: &str) -> Self {
+    pub fn new(direction: RelationDirection, edge: &str, target: &str) -> Self {
         Self {
-            rel_type,
+            direction,
             edge: edge.to_string(),
             target: target.to_string(),
             recursive: None,
@@ -50,8 +62,10 @@ impl Relation {
             parallel: false,
         }
     }
+}
 
-    pub fn build_query_part(&self) -> String {
+impl Display for Relation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut rel_str = String::new();
 
         // Add recursive depth if present
@@ -91,18 +105,12 @@ impl Relation {
                     .join(", ");
                 rel_str.push_str(&fields);
                 rel_str.push('}');
-                return rel_str; // Early return as we don't need edge/target for
+                return write!(f, "{}", rel_str); // Early return as we don't need edge/target for
                                 // field collection
             }
         }
 
-        let direction = match self.rel_type {
-            RelationType::Out => "->",
-            RelationType::In => "<-",
-            RelationType::Both => "<->",
-        };
-
-        rel_str.push_str(direction);
+        rel_str.push_str(self.direction.to_string().as_str());
 
         // Handle conditions and subqueries
         if !self.conditions.is_empty() || self.subquery.is_some() {
@@ -144,7 +152,7 @@ impl Relation {
         }
 
         // Add target
-        rel_str.push_str(&format!("{}{}", direction, self.target));
+        rel_str.push_str(&format!("{}{}", self.direction, self.target));
 
         // Add PARALLEL flag if set
         if self.parallel {
@@ -154,14 +162,14 @@ impl Relation {
         if let Some(alias) = &self.alias {
             rel_str.push_str(&format!(" AS {}", alias));
         }
-        rel_str
+        write!(f, "{}", rel_str)
     }
 }
 
 /// Trait for graph traversal operations
 pub trait GraphTraversal {
     /// Add a graph traversal step
-    fn traverse(self, rel_type: RelationType, edge: &str, target: &str) -> Self;
+    fn traverse(self, rel_type: RelationDirection, edge: &str, target: &str) -> Self;
 
     /// Add recursive traversal
     fn recursive(self, depth: RecursiveDepth) -> Self;
@@ -174,43 +182,43 @@ pub trait GraphTraversal {
     fn with_edge_condition<V: Serialize>(self, field: &str, op: Operator, value: V) -> Self;
 
     /// Add subquery in edge conditions
-    fn with_edge_subquery<U: TableType, V: QueryBuilder<U>>(self, subquery: V) -> Self;
+    fn with_edge_subquery<U: TableType>(self, subquery: SelectStatement<U>) -> Self;
 
     /// Enable parallel processing
     fn parallel(self) -> Self;
 }
 
-impl<T: HasRelations> GraphTraversal for T {
-    fn traverse(mut self, rel_type: RelationType, edge: &str, target: &str) -> Self {
-        self.relations_mut()
-            .push(Relation::new(rel_type, edge, target));
+impl<T: HasProjections> GraphTraversal for T {
+    fn traverse(mut self, rel_type: RelationDirection, edge: &str, target: &str) -> Self {
+        self.projections_mut()
+            .push(Projection::Relation(Relation::new(rel_type, edge, target)));
         self
     }
 
     fn recursive(mut self, depth: RecursiveDepth) -> Self {
-        if let Some(relation) = self.relations_mut().last_mut() {
+        if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {
             relation.recursive = Some(depth);
         }
         self
     }
 
     fn with_alias(mut self, alias: &str) -> Self {
-        if let Some(relation) = self.relations_mut().last_mut() {
+        if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {
             relation.alias = Some(String::from(alias))
         }
         self
     }
 
     fn return_fields(mut self, fields: Vec<&str>) -> Self {
-        if let Some(relation) = self.relations_mut().last_mut() {
+        if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {
             relation.return_fields = fields.into_iter().map(String::from).collect();
         }
         self
     }
 
     fn with_edge_condition<V: Serialize>(mut self, field: &str, op: Operator, value: V) -> Self {
-        let rel_count = &self.relations().len();
-        if let Some(relation) = self.relations_mut().last_mut() {
+        let rel_count = &self.projections().len();
+        if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {
             let param_len = relation.parameters.len();
             let param_name = format!("r{}p{}", rel_count, param_len,);
             let param_value = serde_json::to_value(value).expect("Failed to serialize value");
@@ -222,15 +230,15 @@ impl<T: HasRelations> GraphTraversal for T {
         self
     }
 
-    fn with_edge_subquery<U: TableType, V: QueryBuilder<U>>(mut self, subquery: V) -> Self {
-        if let Some(relation) = self.relations_mut().last_mut() {
+    fn with_edge_subquery<U: TableType>(mut self, subquery: SelectStatement<U>) -> Self {
+        if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {
             relation.subquery = Some(subquery.build().unwrap_or_default());
         }
         self
     }
 
     fn parallel(mut self) -> Self {
-        if let Some(relation) = self.relations_mut().last_mut() {
+        if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {
             relation.parallel = true;
         }
         self

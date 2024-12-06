@@ -6,6 +6,10 @@ use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::time::Duration;
 
+use crate::{
+    FromTarget, HasConditions, HasParams, Operator,  RangeTarget, RecordType,
+    ReturnType, Returns, SqlValue, SurrealDB, SurrealId, WhereClause,
+};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -13,21 +17,10 @@ use serde::Serialize;
 use serde_json::Value;
 use tracing::{error, info, instrument};
 
-use crate::backend::value::SqlValue;
-use crate::backend::QueryBuilder;
-use crate::conditions::Operator;
-use crate::expr::{HasConditions, HasParams};
-use crate::query_result::FromTarget;
-use crate::query_result::FromTarget::RecordList;
-use crate::returns::Returns;
-use crate::types::{NamedType, RangeTarget, RecordType, ReturnType, SurrealId, TableType};
-use crate::wheres::WhereClause;
-use crate::SurrealDB;
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeleteStatement<T>
 where
-    T:RecordType
+    T: RecordType,
 {
     pub(crate) with_id: Option<SurrealId<T>>,
     pub(crate) with_range: Option<RangeTarget>,
@@ -42,7 +35,7 @@ where
 }
 impl<T> DeleteStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     pub fn where_id(mut self, id: SurrealId<T>) -> Self {
         self.with_id = Some(id);
@@ -89,42 +82,9 @@ where
     pub fn edge_of(self, edge: &str) -> EdgeDeleteStatement<T> {
         EdgeDeleteStatement::new(self, edge)
     }
-}
-impl<T> HasParams for DeleteStatement<T>
-where
-    T: RecordType
-{
-    fn params(&self) -> &Vec<(String, Value)> {
-        &self.parameters
-    }
 
-    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
-        &mut self.parameters
-    }
-}
-impl<T> HasConditions for DeleteStatement<T>
-where
-    T: RecordType
-{
-    fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
-        &mut self.conditions
-    }
-}
-impl<T> Returns for DeleteStatement<T>
-where
-    T: RecordType
-{
-    fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
-        &mut self.return_type
-    }
-}
-#[async_trait]
-impl<T> QueryBuilder<T> for DeleteStatement<T>
-where
-    T: RecordType
-{
     #[instrument(skip_all)]
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             with_id: None,
             with_range: None,
@@ -139,7 +99,7 @@ where
         }
     }
     #[instrument(skip(self))]
-    fn build(&self) -> anyhow::Result<String> {
+    pub(crate) fn build(&self) -> anyhow::Result<String> {
         let mut query = String::new();
         query.push_str("DELETE ");
         if self.only {
@@ -227,9 +187,40 @@ where
         }
     }
 }
+impl<T> HasParams for DeleteStatement<T>
+where
+    T: RecordType,
+{
+    fn params(&self) -> &Vec<(String, Value)> {
+        &self.parameters
+    }
+
+    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
+        &mut self.parameters
+    }
+}
+impl<T> HasConditions for DeleteStatement<T>
+where
+    T: RecordType,
+{
+    fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
+        &mut self.conditions
+    }
+}
+impl<T> Returns for DeleteStatement<T>
+where
+    T: RecordType,
+{
+    fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
+        &mut self.return_type
+    }
+}
 
 /// Builder for edge deletion operations
-pub struct EdgeDeleteStatement<T> where T:RecordType {
+pub struct EdgeDeleteStatement<T>
+where
+    T: RecordType,
+{
     inner: DeleteStatement<T>,
     edge: String,
     from_id: Option<String>,
@@ -238,7 +229,7 @@ pub struct EdgeDeleteStatement<T> where T:RecordType {
 
 impl<T> EdgeDeleteStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     #[instrument(skip(inner))]
     pub fn new(inner: DeleteStatement<T>, edge: &str) -> Self {

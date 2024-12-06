@@ -8,6 +8,12 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
+use crate::{
+    Callable, CanCallFunctions, CountFunction, FromTarget, HasConditions, HasLetConditions,
+    HasParams, HasProjections, HasVectorConditions, Indexable, Operator, OrderBy, Projection,
+    RangeTarget, RecordType, SqlValue, SurrealDB, SurrealId, VectorCondition,
+    VectorSearch,
+};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -15,25 +21,16 @@ use serde::Serialize;
 use serde_json::{map, Value};
 use tracing::{error, info, instrument};
 
-use crate::backend::value::SqlValue;
-use crate::backend::QueryBuilder;
-use crate::conditions::Operator;
-use crate::define::index::Indexable;
-use crate::expr::{HasConditions, HasLetConditions, HasParams, HasRelations, HasVectorConditions};
-use crate::func::{Callable, CanCallFunctions, CountFunction};
-use crate::graph::Relation;
-use crate::query_result::{FromTarget, QueryResult};
-use crate::types::{OrderBy, RangeTarget, RecordType, SurrealId, TableType};
-use crate::vector_search::{VectorCondition, VectorSearch};
-use crate::SurrealDB;
-
 #[derive(Clone, Debug, PartialEq)]
-pub struct SelectStatement<T> where T:RecordType{
+pub struct SelectStatement<T>
+where
+    T: RecordType,
+{
     pub(crate) targets: Option<Vec<FromTarget<T>>>,
     pub(crate) select_value: bool,
     pub(crate) with_id: Option<SurrealId<T>>,
     pub(crate) only: bool,
-    pub(crate) selected_fields: Option<Vec<QueryResult>>,
+    pub(crate) selected_fields: Vec<Projection>,
     pub(crate) omitted_fields: Option<Vec<String>>,
     pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
     pub(crate) order_by: Vec<(OrderBy, bool)>,
@@ -44,7 +41,6 @@ pub struct SelectStatement<T> where T:RecordType{
     pub(crate) parameters: Vec<(String, Value)>,
     pub(crate) split_fields: Vec<String>,
     pub(crate) fetch_fields: Vec<String>,
-    pub(crate) relations: Vec<Relation>,
     pub(crate) parallel: bool,
     pub(crate) with_index: Option<Vec<String>>,
     pub(crate) tempfiles: bool,
@@ -53,22 +49,24 @@ pub struct SelectStatement<T> where T:RecordType{
     pub(crate) explain: Option<bool>,
     pub(crate) version: Option<String>,
     pub(crate) let_statements: Vec<(String, String)>,
-    phantom_data: PhantomData<T>
+    phantom_data: PhantomData<T>,
 }
 
 // Base implementation for all states
 impl<T> SelectStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     /// Select specific fields, optionally with aliases
     #[instrument(skip(self))]
     pub fn field(mut self, expr: &str, alias: Option<&str>) -> Self {
-        let fields = self.selected_fields.get_or_insert_with(Vec::new);
-        fields.push(QueryResult::Field {
-            expr: expr.to_string(),
-            alias: alias.map(String::from),
-        });
+        if let Some(alias) = alias {
+            self.selected_fields
+                .push(Projection::FieldAs(expr.to_string(), alias.to_string()));
+        } else {
+            self.selected_fields
+                .push(Projection::Field(expr.to_string()));
+        }
         self
     }
     pub fn where_id(mut self, id: SurrealId<T>) -> Self {
@@ -79,52 +77,92 @@ where
     /// Select multiple fields
     #[instrument(skip(self))]
     pub fn fields(mut self, fields: &[&str]) -> Self {
-        let l_fields = self.selected_fields.get_or_insert_with(Vec::new);
         for expr in fields.iter() {
-            l_fields.push(QueryResult::Field {
-                expr: expr.to_string(),
-                alias: None,
-            });
+            self.selected_fields
+                .push(Projection::Field(expr.to_string()));
         }
+        self
+    }
+    pub fn field_with_function(mut self, field: &str, function: &str) -> Self {
+        let expression = format!("{}.{}()", field, function);
+        self.selected_fields.push(Projection::Raw(expression));
+        self
+    }
+
+    pub fn expression(mut self, expr: &str) -> Self {
+        self.selected_fields.push(Projection::Raw(expr.to_string()));
+        self
+    }
+
+    pub fn destructure(mut self, path: &str, fields: &[&str]) -> Self {
+        let fields_str = fields.join(", ");
+        let expression = format!("{}.{{ {} }}", path, fields_str);
+        self.selected_fields.push(Projection::Raw(expression));
         self
     }
 
     /// Select multiple fields
     #[instrument(skip(self))]
     pub fn fields_with_alias(mut self, fields: &[(&str, Option<&str>)]) -> Self {
-        let l_fields = self.selected_fields.get_or_insert_with(Vec::new);
         for (expr, alias) in fields.iter() {
-            l_fields.push(QueryResult::Field {
-                expr: expr.to_string(),
-                alias: alias.map(String::from),
-            });
+            if let Some(alias) = alias {
+                self.selected_fields
+                    .push(Projection::FieldAs(expr.to_string(), alias.to_string()));
+            } else {
+                self.selected_fields
+                    .push(Projection::Field(expr.to_string()));
+            }
         }
         self
     }
 
     /// Add a subquery to SELECT fields
     #[instrument(skip_all)]
-    pub fn subquery<U, QB: QueryBuilder<U>>(
+    pub fn subquery<U>(
         mut self,
-        subquery: QB,
+        subquery: SelectStatement<U>,
         alias: Option<&str>,
     ) -> Result<Self>
     where
-        U: RecordType
+        U: RecordType,
     {
-        let fields = self.selected_fields.get_or_insert_with(Vec::new);
-        fields.push(QueryResult::Subquery {
-            query: subquery.build()?,
-            alias: alias.map(String::from),
-        });
+        self.selected_fields.push(Projection::Subquery(
+            subquery.build()?,
+            alias.map(String::from),
+        ));
         Ok(self)
     }
 
     /// Select fields with raw expressions
     #[instrument(skip(self))]
     pub fn raw(mut self, raw_sql: &str) -> Self {
-        let fields = self.selected_fields.get_or_insert_with(Vec::new);
-        fields.push(QueryResult::Raw(raw_sql.into()));
+        self.selected_fields.push(Projection::Raw(raw_sql.into()));
+        self
+    }
+
+    pub fn raw_as(mut self, raw_sql: &str, alias: &str) -> Self {
+        self.selected_fields
+            .push(Projection::RawAs(raw_sql.into(), alias.to_string()));
+        self
+    }
+
+    pub fn relation_wildcard_as(mut self, alias: &str) -> Self {
+        self.selected_fields
+            .push(Projection::RelationWildcardAs(alias.to_string()));
+        self
+    }
+
+    pub fn relation_inverse_wildcard_as(mut self, alias: &str) -> Self {
+        self.selected_fields
+            .push(Projection::RelationInverseWildcardAs(alias.to_string()));
+        self
+    }
+
+    pub fn relation_bidirectional_wildcard_as(mut self, alias: &str) -> Self {
+        self.selected_fields
+            .push(Projection::RelationBidirectionalWildcardAs(
+                alias.to_string(),
+            ));
         self
     }
 
@@ -214,29 +252,28 @@ where
 
     /// Simple count, returns 1
     pub fn count(mut self) -> Self {
-        self.selected_fields
-            .get_or_insert_with(Vec::new)
-            .push(QueryResult::Raw(CountFunction::Count.to_string()));
+        self.selected_fields.push(Projection::RawAs(
+            CountFunction::Count.to_string(),
+            "count".to_string(),
+        ));
         self
     }
 
     /// Count truthy value
     pub fn count_value(mut self, value: &str) -> Self {
-        self.selected_fields
-            .get_or_insert_with(Vec::new)
-            .push(QueryResult::Raw(
-                CountFunction::CountValue(value.to_string()).to_string(),
-            ));
+        self.selected_fields.push(Projection::RawAs(
+            CountFunction::CountValue(value.to_string()).to_string(),
+            "count".to_string(),
+        ));
         self
     }
 
     /// Count truthy values in array
     pub fn count_array(mut self, array: &str) -> Self {
-        self.selected_fields
-            .get_or_insert_with(Vec::new)
-            .push(QueryResult::Raw(
-                CountFunction::CountArray(array.to_string()).to_string(),
-            ));
+        self.selected_fields.push(Projection::RawAs(
+            CountFunction::CountArray(array.to_string()).to_string(),
+            "count".to_string(),
+        ));
         self
     }
 
@@ -340,8 +377,8 @@ where
     ///     .field_filter("address", "active = true");
     /// ```
     pub fn field_filter(mut self, field: &str, condition: &str) -> Result<Self> {
-        let fields = self.selected_fields.get_or_insert_with(Vec::new);
-        fields.push(QueryResult::Raw(format!("{}[WHERE {}]", field, condition)));
+        self.selected_fields
+            .push(Projection::Raw(format!("{}[WHERE {}]", field, condition)));
         Ok(self)
     }
 
@@ -358,8 +395,7 @@ where
         self.parameters
             .push((param_name.clone(), serde_json::to_value(value)?));
 
-        let fields = self.selected_fields.get_or_insert_with(Vec::new);
-        fields.push(QueryResult::Raw(format!(
+        self.selected_fields.push(Projection::Raw(format!(
             "{}[WHERE {} {} ${}]",
             field,
             condition_field,
@@ -368,100 +404,9 @@ where
         )));
         Ok(self)
     }
-}
-impl<T> HasVectorConditions for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn get_vector_conditions(&self) -> &Vec<VectorCondition> {
-        &self.vector_conditions
-    }
-
-    fn get_vector_conditions_mut(&mut self) -> &mut Vec<VectorCondition> {
-        &mut self.vector_conditions
-    }
-}
-
-impl<T> HasParams for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn params(&self) -> &Vec<(String, Value)> {
-        &self.parameters
-    }
-
-    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
-        &mut self.parameters
-    }
-}
-
-impl<T> HasConditions for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
-        &mut self.conditions
-    }
-}
-impl<T> HasRelations for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn relations(&self) -> &Vec<Relation> {
-        &self.relations
-    }
-
-    fn relations_mut(&mut self) -> &mut Vec<Relation> {
-        &mut self.relations
-    }
-}
-impl<T> CanCallFunctions for SelectStatement<T>
-where
-    T: RecordType
-{
-    /// Call a standard function
-    fn call_function<F: Callable>(mut self, func: F) -> Self {
-        self.selected_fields
-            .get_or_insert_with(Vec::new)
-            .push(QueryResult::Raw(func.to_string()));
-        self
-    }
-}
-
-impl<T> Indexable for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn with_index(&self) -> &Option<Vec<String>> {
-        &self.with_index
-    }
-
-    fn with_index_mut(&mut self) -> &mut Option<Vec<String>> {
-        &mut self.with_index
-    }
-}
-
-impl<T> HasLetConditions for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn get_lets(&self) -> &Vec<(String, String)> {
-        &self.let_statements
-    }
-
-    fn get_lets_mut(&mut self) -> &mut Vec<(String, String)> {
-        &mut self.let_statements
-    }
-}
-
-#[async_trait]
-impl<T> QueryBuilder<T> for SelectStatement<T>
-where
-    T: RecordType
-{
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            selected_fields: None,
+            selected_fields: Vec::new(),
             omitted_fields: None,
             conditions: Vec::new(),
             order_by: Vec::new(),
@@ -469,7 +414,6 @@ where
             all: false,
             limit: None,
             fetch_fields: Vec::new(),
-            relations: Vec::new(),
             with_index: None,
             parameters: Vec::new(),
             split_fields: Vec::new(),
@@ -489,7 +433,7 @@ where
         }
     }
 
-    fn build(&self) -> Result<String> {
+    pub fn build(&self) -> Result<String> {
         let mut query = String::new();
         let mut params = self.parameters.clone();
         if !self.let_statements.is_empty() {
@@ -513,18 +457,22 @@ where
         if self.select_value {
             query.push_str("VALUE ");
         }
-        // Add fields
-        match (&self.selected_fields, &self.omitted_fields) {
-            (Some(fields), _) => {
-                let field_strs: Vec<String> = fields.iter().map(|f| f.to_string()).collect();
-                query.push_str(&field_strs.join(", "));
-            }
-            (None, Some(omit)) => {
-                query.push_str("* OMIT ");
-                query.push_str(&omit.join(", "));
-            }
-            (None, None) => query.push('*'),
+        if self.selected_fields.is_empty() {
+            query.push('*');
+        } else {
+            let field_strs: Vec<String> = self
+                .selected_fields
+                .iter()
+                .map(|proj| proj.to_string())
+                .collect();
+            query.push_str(&field_strs.join(", "));
         }
+
+        if let Some(fields) = &self.omitted_fields {
+            query.push_str(" OMIT ");
+            query.push_str(&fields.join(", "));
+        }
+
         // Add FROM clause
         query.push_str(" FROM ");
         if self.only {
@@ -549,15 +497,6 @@ where
                 query.push_str(id.to_string().as_str());
             } else {
                 query.push_str(T::table_name());
-            }
-        }
-
-        // Add relations if present
-        if !self.relations.is_empty() {
-            for relation in &self.relations {
-                query.push_str(&relation.build_query_part());
-                // Add relation parameters to the query parameters
-                params.extend(relation.parameters.clone());
             }
         }
 
@@ -630,6 +569,12 @@ where
             query.push_str(&self.fetch_fields.join(", "));
         }
 
+        for projection in &self.selected_fields {
+            if let Projection::Relation(relation) = projection {
+                params.extend(relation.parameters.clone());
+            }
+        }
+
         // Add TIMEOUT
         if let Some(timeout) = &self.timeout {
             query.push_str(&format!(" TIMEOUT {}", timeout.as_secs()));
@@ -658,7 +603,7 @@ where
     }
 
     #[instrument(skip(self))]
-    async fn execute(mut self, conn: SurrealDB) -> Result<Vec<T>> {
+    pub async fn execute(mut self, conn: SurrealDB) -> Result<Vec<T>> {
         let query = self.build()?;
         info!("Executing query: {}", query);
 
@@ -677,5 +622,87 @@ where
                 Err(anyhow!(e))
             }
         }
+    }
+}
+impl<T> HasVectorConditions for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn get_vector_conditions(&self) -> &Vec<VectorCondition> {
+        &self.vector_conditions
+    }
+
+    fn get_vector_conditions_mut(&mut self) -> &mut Vec<VectorCondition> {
+        &mut self.vector_conditions
+    }
+}
+
+impl<T> HasParams for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn params(&self) -> &Vec<(String, Value)> {
+        &self.parameters
+    }
+
+    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
+        &mut self.parameters
+    }
+}
+
+impl<T> HasConditions for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
+        &mut self.conditions
+    }
+}
+impl<T> HasProjections for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn projections(&self) -> &Vec<Projection> {
+        &self.selected_fields
+    }
+
+    fn projections_mut(&mut self) -> &mut Vec<Projection> {
+        &mut self.selected_fields
+    }
+}
+impl<T> CanCallFunctions for SelectStatement<T>
+where
+    T: RecordType,
+{
+    /// Call a standard function
+    fn call_function<F: Callable>(mut self, func: F) -> Self {
+        self.selected_fields.push(Projection::Raw(func.to_string()));
+        self
+    }
+}
+
+impl<T> Indexable for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn with_index(&self) -> &Option<Vec<String>> {
+        &self.with_index
+    }
+
+    fn with_index_mut(&mut self) -> &mut Option<Vec<String>> {
+        &mut self.with_index
+    }
+}
+
+impl<T> HasLetConditions for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn get_lets(&self) -> &Vec<(String, String)> {
+        &self.let_statements
+    }
+
+    fn get_lets_mut(&mut self) -> &mut Vec<(String, String)> {
+        &mut self.let_statements
     }
 }

@@ -1,15 +1,18 @@
 //! Index definition & alternations statements.
 //!
-//! # Usage
-//!
-//! - Table Index Define, see [`IndexDefineStatement`]
-//! - Table Index Delete, see [`IndexDeleteStatement`]
+//! //DEFINE INDEX [ OVERWRITE | IF NOT EXISTS ] @name ON [ TABLE ] @Table [ FIELDS | COLUMNS ]
+//! @fields
+//!	[ UNIQUE
+//!        | SEARCH ANALYZER @analyzer [ BM25 [(@k1, @b)] ] [ HIGHLIGHTS ]
+//!        | MTREE DIMENSION @dimension [ TYPE @type ] [ DIST @distance ] [ CAPACITY @capacity]
+//!        | HNSW DIMENSION @dimension [ TYPE @type ] [DIST @distance] [ EFC @efc ] [ M @m ]
+//!    ]
+//!    [ COMMENT @string ]
+//!    [ CONCURRENTLY ]
 
-mod common;
 mod define;
 mod delete;
 
-pub use common::*;
 pub use define::*;
 pub use delete::*;
 

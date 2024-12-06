@@ -80,7 +80,6 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
             "".to_string()
         };
         let overwrite = attrs.overwrite;
-        let use_table = attrs.use_table;
         let if_not_exists = attrs.if_not_exists;
         let unique = attrs.unique;
         let comment = match attrs.comment {
@@ -97,7 +96,6 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
                     #fields,
                     #columns,
                     #overwrite,
-                    #use_table,
                     #if_not_exists,
                     #unique,
                     #specifics.to_string(),
@@ -114,7 +112,7 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
     let err_type = quote!(magritte::IndexFromStrErr);
     let trait_impls = quote! {
 
-        impl #impl_generics #parent #type_generics #where_clause {
+        impl #impl_generics magritte::prelude::HasIndexes for #parent #type_generics #where_clause {
             pub fn indexes() -> impl Iterator<Item = #ident #type_generics> {
                 use strum::IntoEnumIterator;
                 #ident::iter()

@@ -5,16 +5,11 @@
 use std::fmt::{Debug, Display};
 use std::time::Duration;
 
+use crate::{FromTarget,RecordType, ReturnType, SurrealDB, SurrealId};
 use anyhow::Result;
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tracing::instrument;
-
-use crate::backend::QueryBuilder;
-use crate::query_result::FromTarget;
-use crate::types::{NamedType, RecordType, ReturnType, TableType};
-use crate::SurrealDB;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -27,9 +22,10 @@ pub enum Content {
 #[derive(Clone, Debug, PartialEq)]
 pub struct InsertStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     pub(crate) targets: Option<Vec<FromTarget<T>>>,
+    pub(crate) with_id: Option<SurrealId<T>>,
     pub(crate) only: bool,
     pub(crate) content: Option<Content>,
     pub(crate) parameters: Vec<(String, serde_json::Value)>,
@@ -43,8 +39,12 @@ where
 
 impl<T> InsertStatement<T>
 where
-    T: RecordType
+    T: RecordType,
 {
+    pub fn where_id(mut self, id: SurrealId<T>) -> Self {
+        self.with_id = Some(id);
+        self
+    }
     pub fn content(mut self, content: T) -> Result<Self> {
         self.content = Some(Content::Value(serde_json::to_value(content)?));
         Ok(self)
@@ -122,15 +122,10 @@ where
         self.ignore = true;
         self
     }
-}
-#[async_trait]
-impl<T> QueryBuilder<T> for InsertStatement<T>
-where
-    T: RecordType
-{
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             targets: None,
+            with_id: None,
             only: false,
             content: None,
             parameters: vec![],

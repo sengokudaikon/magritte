@@ -1,3 +1,4 @@
+use std::fmt::format;
 use super::{
     attributes::{resolve_table_name, split_generics, Column, Table},
     expr_array_to_vec,
@@ -11,7 +12,7 @@ use serde_json::map;
 use syn::{Data, DeriveInput, ExprArray, Field, Fields, parse_quote};
 
 fn extract_field_type(field: &Field) -> String {
-    type_to_surrealdb_type(&field.ty)
+    type_to_surrealdb_type(&field.ty).to_string()
 }
 
 pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> {
@@ -48,7 +49,8 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     let mut column_defs = Vec::new();
     let mut column_names = Vec::new();
     let mut column_types = Vec::new();
-
+    
+    let entity_type: syn::Type = parse_quote!(#entity_name);
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
         let variant_name = format_ident!("{}", field_name.to_string().to_pascal_case());
@@ -68,10 +70,11 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             .name
             .clone()
             .unwrap_or_else(|| field_name.to_string().to_snake_case());
-
-        let field_type_ = &field.ty;
-        // Use our new type inference
-        let field_type = extract_field_type(field);
+        let field_type = if field_name.to_string().to_lowercase() == "id" {
+            format!("record<{}>", table_name_str)
+        } else {
+            extract_field_type(field)
+        };
         let type_name = field_attrs.type_name.clone().unwrap_or_else(|| field_type);
         let permissions = match field_attrs.permissions.as_ref() {
             None => quote!(None), //None,
@@ -138,7 +141,6 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
                 #comment_value
             )
         };
-
         column_variants.push(quote!(#variant_name));
         column_defs.push(def);
         column_names.push(column_name);
@@ -146,10 +148,16 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     }
 
     let err_type = quote!(magritte::prelude::ColumnFromStrErr);
-
-    let entity_type: syn::Type = parse_quote!(#entity_name);
-
+    
     Ok(quote! {
+        impl #impl_generics magritte::prelude::HasColumns for #entity_type #type_generics #where_clause {
+            pub fn columns() -> impl Iterator<Item = #column_enum_name #type_generics> {
+                use strum::IntoEnumIterator;
+                #column_enum_name::iter()
+            }
+        }
+
+        #[automatically_derived]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, serde::Serialize, serde::Deserialize)]
         pub enum #column_enum_name #type_generics #where_clause {
             #(#column_variants),*,

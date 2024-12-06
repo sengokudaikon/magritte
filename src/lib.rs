@@ -1,4 +1,5 @@
 #![feature(duration_constructors)]
+#![feature(min_specialization)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
 //! magritte - A powerful QueryBuilder for SurrealDB
@@ -11,6 +12,7 @@ pub mod entity;
 pub mod prelude;
 mod defs;
 pub mod entity_crud;
+pub mod migration;
 
 use std::collections::HashMap;
 use thiserror::Error;

@@ -1,5 +1,7 @@
 use magritte_query::types::{EventType, TableType};
 use std::fmt::{Debug, Display};
+use anyhow::bail;
+use magritte_query::{DefineEventStatement, NamedType, RecordType};
 
 /// Defines an Event for a Table
 #[derive(Debug, Clone, PartialEq)]
@@ -14,20 +16,15 @@ pub struct EventDef {
 }
 
 pub trait EventTrait: EventType {
-    type EntityName: TableType;
+    type EntityName: NamedType;
 
     fn def(&self) -> EventDef;
-    fn to_statement(&self) -> String {
+    fn to_statement(&self) -> anyhow::Result<DefineEventStatement> {
         self.def().to_statement()
     }
 }
 
 impl EventDef {
-    fn cleanup(s: impl Into<String>) -> String {
-        let mut s = s.into().replace("\"","");
-        s = s.replace("var:", "$");
-        s
-    }
     pub fn new(
         name: impl Into<String>,
         table: impl Into<String>,
@@ -42,8 +39,8 @@ impl EventDef {
             table: table.into(),
             overwrite,
             if_not_exists,
-            when: Self::cleanup(when),
-            then: Self::cleanup(then),
+            when,
+            then,
             comment,
         }
     }
@@ -68,30 +65,32 @@ impl EventDef {
     pub fn if_not_exists(&self) -> bool {
         self.if_not_exists
     }
-    pub fn to_statement(&self) -> String {
-        let mut stmt = String::new();
-        stmt.push_str("DEFINE EVENT ");
+    pub fn to_statement(&self) -> anyhow::Result<DefineEventStatement> {
+        let mut def = DefineEventStatement::new();
+
         if self.overwrite {
-            stmt.push_str("OVERWRITE ");
+            def = def.overwrite();
         } else if self.if_not_exists {
-            stmt.push_str("IF NOT EXISTS ");
+            def = def.if_not_exists();
         }
-        stmt.push_str(&self.name);
 
-        stmt.push_str(" ON TABLE ");
-        stmt.push_str(&self.table);
-
-        stmt.push_str(" WHEN ");
-        stmt.push_str(&*Self::cleanup(&self.when));
-
-        stmt.push_str(" THEN ");
-        stmt.push_str(&*Self::cleanup(&self.then));
+        def = def.name(self.name.clone()).table(self.table.clone());
 
         if let Some(comment) = &self.comment {
-            stmt.push_str(&format!(" COMMENT \"{}\"", comment));
+            def = def.comment(comment.clone());
         }
 
-        stmt.push(';');
-        stmt
+        if let Some(when) = &self.when {
+            def = def.when(when.clone());
+        } else {
+            bail!("Event When is required");
+        }
+
+        if let Some(then) = &self.then {
+            def = def.then(then.clone());
+        } else {
+            bail!("Event Then is required");
+        }
+        Ok(def)
     }
 }

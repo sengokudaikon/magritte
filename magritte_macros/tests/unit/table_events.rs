@@ -1,37 +1,7 @@
-use crate::table::{Product, UserModel};
+use crate::{Order, OrderColumns, User};
 use magritte::prelude::*;
+use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
-
-// Test table with nested columns and relationships
-#[derive(Table, Serialize, Deserialize,  Clone)]
-#[table(name = "orders")]
-pub struct Order {
-    #[column(type = "string")]
-    id: String,
-
-    #[column(type = "datetime")]
-    created_at: String,
-
-    #[column(type = "record<users>", assert = "value != NONE")]
-    user: RecordRef<UserModel>,
-
-    #[column(type = "array<record<products>>")]
-    items: Vec<RecordRef<Product>>,
-
-    #[column(type = "decimal", assert = "value >= 0")]
-    total: f64,
-
-    #[column(type = "object", flexible)]
-    shipping_info: serde_json::Value,
-    #[column(value = "pending|processing|shipped|delivered")]
-    status: String,
-}
-
-impl HasId for Order {
-    fn id(&self) -> SurrealId<Self> {
-        SurrealId::new(&self.id)
-    }
-}
 
 // Test table events
 #[derive(Event, Serialize, Deserialize, strum::EnumIter)]
@@ -50,7 +20,6 @@ pub enum OrderEvents {
     )]
     Created,
 }
-
 
 
 #[test]
@@ -124,19 +93,15 @@ fn test_table_events() {
 #[test]
 fn test_table_with_events() {
     // Test table with events
-    let _order = Order {
-        id: "1".to_string(),
-        created_at: "2023-01-01T00:00:00Z".to_string(),
-        user: UserModel {
-            id: "user1".to_string(),
-            name: "John".to_string(),
-        }
-        .as_record(),
-        items: vec![],
-        total: 100.0,
-        shipping_info: serde_json::json!({}),
-        status: "pending".to_string(),
-    };
+    let _order = Order::new(
+        "1",
+        "2023-01-01T00:00:00Z".to_string(),
+        User::new("2", "Jane", "jdoe@me.com").as_record(),
+        vec![],
+        100.0,
+        serde_json::json!({}),
+        "pending".to_string(),
+    );
 
     // Test event triggers
     let events = Order::events().collect::<Vec<_>>();
