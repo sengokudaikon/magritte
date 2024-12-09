@@ -1,14 +1,16 @@
 //! Vector search functionality for SurrealDB queries
 
-use std::fmt::{self, Display, Formatter};
-use std::str::FromStr;
-use serde::{Deserialize, Serialize};
-use crate::define::index::Indexable;
 use crate::expr::HasVectorConditions;
 use crate::func::{CanCallFunctions, VectorFunction};
-
+use serde::{Deserialize, Serialize};
+use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
+pub trait Indexable {
+    fn with_index(&self) -> &Option<Vec<String>>;
+    fn with_index_mut(&mut self) -> &mut Option<Vec<String>>;
+}
 /// Vector search operators
-#[derive(Clone, Copy, Default, Debug,  PartialEq, PartialOrd, Serialize, Deserialize)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum VectorDistance {
     /// Cosine similarity
     #[default]
@@ -99,7 +101,7 @@ impl From<String> for VectorDistance {
 }
 
 /// Vector search conditions
-#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize,)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum VectorCondition {
     /// Similarity search with optional threshold
     Similarity {

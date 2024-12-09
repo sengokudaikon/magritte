@@ -8,6 +8,8 @@ pub struct DefineFieldStatement {
     pub(crate) name: Option<String>,
     pub(crate) table_name: Option<String>,
     pub(crate) column_type: Option<FieldType>,
+    pub(crate) overwrite: bool,
+    pub(crate) if_not_exists: bool,
     pub(crate) null: bool,
     pub(crate) default: Option<String>,
     pub(crate) assert: Option<String>,
@@ -73,6 +75,16 @@ impl DefineFieldStatement {
         self
     }
 
+    pub fn overwrite(mut self) -> Self {
+        self.overwrite = true;
+        self
+    }
+
+    pub fn if_not_exists(mut self) -> Self {
+        self.if_not_exists = true;
+        self
+    }
+
     pub fn comment(mut self, comment: impl Into<String>) -> Self {
         self.comment = Some(comment.into());
         self
@@ -90,6 +102,12 @@ impl DefineFieldStatement {
             bail!("Field name is required");
         }
 
+        if self.if_not_exists {
+            stmt.push_str(" IF NOT EXISTS");
+        }else if self.overwrite {
+            stmt.push_str(" OVERWRITE");
+        }
+
         if let Some(table_name) = &self.table_name {
             stmt.push_str(" ON TABLE ");
             stmt.push_str(table_name.as_str());
@@ -102,7 +120,7 @@ impl DefineFieldStatement {
         }
 
         if let Some(column_type) = &self.column_type {
-            stmt.push_str(&format!("TYPE {}", column_type));
+            stmt.push_str(&format!(" TYPE {}", column_type));
         }
 
         if self.null {

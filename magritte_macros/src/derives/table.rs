@@ -6,13 +6,14 @@ use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DeriveInput, Fields, FieldsNamed};
+use macro_helpers::get_crate_name;
 
 pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = split_generics(&input);
     let mut attrs = input.attrs.clone();
     let table_attr = Table::extract_attributes(&mut attrs)?;
-
+    let crate_name = get_crate_name(false);
     // Use shared table name resolution
     let table_name = resolve_table_name(&table_attr, ident);
     let table_name_lit = quote!(#table_name);
@@ -51,7 +52,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     };
 
     let def = quote! {
-        TableDef::new(
+        #crate_name::TableDef::new(
             #table_name,
             #schema_type,
             #overwrite,
@@ -64,7 +65,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
         )
     };
 
-    let err_type = quote!(magritte::TableFromStrErr);
+    let err_type = quote!(#crate_name::TableFromStrErr);
     let data = match &input.data {
         syn::Data::Struct(data) => data,
         _ => {
@@ -103,25 +104,25 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
         #column_impl
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::NamedType for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::NamedType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
                 #table_name_str
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::RecordType for #ident #type_generics #where_clause {}
+        impl #impl_generics #crate_name::RecordType for #ident #type_generics #where_clause {}
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::TableType for #ident #type_generics #where_clause {
-            fn schema_type() -> magritte::prelude::SchemaType {
+        impl #impl_generics #crate_name::TableType for #ident #type_generics #where_clause {
+            fn schema_type() -> #crate_name::SchemaType {
                 #schema_type.into()
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::TableTrait for #ident #type_generics #where_clause {
-            fn def(&self) -> magritte::prelude::TableDef {
+        impl #impl_generics #crate_name::TableTrait for #ident #type_generics #where_clause {
+            fn def() -> #crate_name::TableDef {
                 #def
             }
         }
@@ -145,6 +146,12 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
             #[inline]
             fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 write!(f, "{}", #table_name_str)
+            }
+        }
+
+        inventory::submit! {
+            #crate_name::TableRegistration {
+                builder: || #crate_name::table_snapshot::<#ident #type_generics>()
             }
         }
     };

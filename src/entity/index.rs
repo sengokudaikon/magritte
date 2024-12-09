@@ -1,6 +1,5 @@
-use crate::prelude::IndexSpecifics;
 use magritte_query::types::IndexType;
-use magritte_query::{Define, DefineIndexStatement, NamedType};
+use magritte_query::{Define, DefineIndexStatement, IndexSpecifics, NamedType};
 use std::fmt::{Debug, Display};
 
 /// Defines an Index for a Table
@@ -29,6 +28,7 @@ pub trait IndexTrait: IndexType {
 }
 
 impl IndexDef {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<String>,
         table: impl Into<String>,
@@ -87,7 +87,7 @@ impl IndexDef {
         &self.specifics
     }
     pub fn comment(&self) -> Option<&str> {
-        self.comment.as_ref().map(|c| c.as_str())
+        self.comment.as_deref()
     }
     pub fn to_statement(&self) -> DefineIndexStatement {
         let mut def = Define::index()

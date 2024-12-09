@@ -84,7 +84,7 @@ fn test_table_events() {
     assert_eq!(OrderEvents::table_name(), "orders");
     assert_eq!(created.event_name(), "created");
     // Test event statements
-    let created_stmt = created.to_statement();
+    let created_stmt = created.to_statement()?.build();
     assert!(created_stmt.contains("DEFINE EVENT created ON TABLE orders"));
     assert!(created_stmt.contains("WHEN $before==NONE"));
     assert!(created_stmt.contains("THEN UPDATE orders SET status = 'pending';"));

@@ -58,7 +58,7 @@ impl FromStr for AsSelect {
         })
     }
 }
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct DefineTableStatement<T: TableType> {
     pub(crate) name: Option<String>,
     pub(crate) schema_type: Option<SchemaType>,
@@ -70,6 +70,23 @@ pub struct DefineTableStatement<T: TableType> {
     pub(crate) changefeed: Option<(Duration, bool)>,
     pub(crate) comment: Option<String>,
     _marker: std::marker::PhantomData<T>,
+}
+
+impl <T> Default for DefineTableStatement<T> where T: TableType {
+    fn default() -> Self {
+        Self {
+            name: None,
+            schema_type: None,
+            overwrite: false,
+            if_not_exists: false,
+            permissions: None,
+            drop: false,
+            as_select: None,
+            changefeed: None,
+            comment: None,
+            _marker: Default::default(),
+        }
+    }
 }
 
 impl<T> DefineTableStatement<T>

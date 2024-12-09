@@ -1,5 +1,6 @@
 #![feature(duration_constructors)]
 #![feature(min_specialization)]
+#![feature(associated_type_defaults)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
 //! magritte - A powerful QueryBuilder for SurrealDB
@@ -8,21 +9,18 @@
 //! This crate provides a type-safe query
 //! builder for SurrealDB with enhanced schema support.
 
-pub mod entity;
-pub mod prelude;
 mod defs;
+pub mod entity;
 pub mod entity_crud;
-pub mod migration;
+mod snapshot;
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// Result type for magritte operations
-pub type Result<T> = std::result::Result<T, Error>;
-
 /// Error type for magritte operations
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum MagritteError {
     #[error("SurrealDB error: {0}")]
     Surreal(#[from] surrealdb::Error),
 
@@ -85,3 +83,40 @@ impl EdgeFromStrErr {
         EdgeFromStrErr(s.into())
     }
 }
+
+// Re-exports for convenience
+pub use crate::snapshot::*;
+pub use defs::*;
+pub use entity::column::ColumnTrait;
+pub use entity::edge::EdgeTrait;
+pub use entity::event::EventTrait;
+pub use entity::index::IndexTrait;
+pub use entity::relation::RelationTrait;
+pub use entity::table::TableTrait;
+pub use entity::HasColumns;
+pub use entity::HasEvents;
+pub use entity::HasIndexes;
+pub use entity::HasRelations;
+pub use magritte_macros::EnumIter;
+pub use magritte_macros::*;
+pub use magritte_macros::{Column, Edge, Event, Index, Relation, Table};
+pub use magritte_query::*;
+pub use strum;
+pub use surrealdb::RecordId;
+pub use RecordType;
+pub struct TableRegistration {
+    pub builder: fn() -> Result<TableSnapshot>,
+}
+
+pub struct EdgeRegistration {
+    pub builder: fn() -> Result<EdgeSnapshot>,
+}
+
+// Global inventory of `TableRegistration` entries
+inventory::collect!(TableRegistration);
+
+// Global inventory of `EdgeRegistration` entries
+inventory::collect!(EdgeRegistration);
+
+#[cfg(feature = "uuid")]
+pub use magritte_query::uuid::*;

@@ -23,14 +23,14 @@ pub struct Index;
 /// All available types of index statement
 #[derive(Debug, Clone)]
 pub enum IndexStatement {
-    Define(IndexDefineStatement),
+    Define(DefineIndexStatement),
     Delete(IndexDeleteStatement),
 }
 
 impl Index {
     /// Define index [`IndexDefineStatement`]
-    pub fn define() -> IndexDefineStatement {
-        IndexDefineStatement::new()
+    pub fn define() -> DefineIndexStatement {
+        DefineIndexStatement::new()
     }
 
     /// Delete index [`IndexDeleteStatement`]
@@ -39,7 +39,3 @@ impl Index {
     }
 }
 
-pub trait Indexable {
-    fn with_index(&self) -> &Option<Vec<String>>;
-    fn with_index_mut(&mut self) -> &mut Option<Vec<String>>;
-}

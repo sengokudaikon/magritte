@@ -1,7 +1,7 @@
-use magritte_query::types::{EventType, TableType};
-use std::fmt::{Debug, Display};
 use anyhow::bail;
+use magritte_query::types::{EventType, TableType};
 use magritte_query::{DefineEventStatement, NamedType, RecordType};
+use std::fmt::{Debug, Display};
 
 /// Defines an Event for a Table
 #[derive(Debug, Clone, PartialEq)]
@@ -39,8 +39,8 @@ impl EventDef {
             table: table.into(),
             overwrite,
             if_not_exists,
-            when,
-            then,
+            when: when.into(),
+            then: then.into(),
             comment,
         }
     }
@@ -57,7 +57,7 @@ impl EventDef {
         self.then.as_str()
     }
     pub fn comment(&self) -> Option<&str> {
-        self.comment.as_ref().map(|c| c.as_str())
+        self.comment.as_deref()
     }
     pub fn is_overwrite(&self) -> bool {
         self.overwrite
@@ -80,17 +80,9 @@ impl EventDef {
             def = def.comment(comment.clone());
         }
 
-        if let Some(when) = &self.when {
-            def = def.when(when.clone());
-        } else {
-            bail!("Event When is required");
-        }
+        def = def.when(self.when.clone());
 
-        if let Some(then) = &self.then {
-            def = def.then(then.clone());
-        } else {
-            bail!("Event Then is required");
-        }
+        def = def.then(self.then.clone());
         Ok(def)
     }
 }

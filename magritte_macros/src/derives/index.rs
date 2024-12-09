@@ -4,6 +4,7 @@ use magritte_query::vector_search::{VectorDistance, VectorType};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput};
+use macro_helpers::get_crate_name;
 
 fn strip_indexes_suffix(ident: &syn::Ident) -> syn::Path {
     let name = ident.to_string();
@@ -18,7 +19,7 @@ fn strip_indexes_suffix(ident: &syn::Ident) -> syn::Path {
 pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = split_generics(&input);
-
+    let crate_name = get_crate_name(false);
     let data = match &input.data {
         Data::Enum(data) => data,
         _ => {
@@ -90,9 +91,9 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
 
         let def = quote! {
             #ident::#variant_name => {
-                IndexDef::new(
+                #crate_name::IndexDef::new(
                     #index_name.to_string(),
-                    <#parent as magritte::prelude::NamedType>::table_name(),
+                    <#parent as #crate_name::NamedType>::table_name(),
                     #fields,
                     #columns,
                     #overwrite,
@@ -109,21 +110,21 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
         index_defs.push(def);
     }
 
-    let err_type = quote!(magritte::IndexFromStrErr);
+    let err_type = quote!(#crate_name::IndexFromStrErr);
     let trait_impls = quote! {
 
-        impl #impl_generics magritte::prelude::HasIndexes for #parent #type_generics #where_clause {
-            pub fn indexes() -> impl Iterator<Item = #ident #type_generics> {
+        impl #impl_generics #crate_name::HasIndexes for #parent #type_generics #where_clause {
+            fn indexes() -> Vec<#ident #type_generics> {
                 use strum::IntoEnumIterator;
-                #ident::iter()
+                #ident::iter().collect::<Vec<_>>()
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::IndexTrait for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::IndexTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
-            fn def(&self) -> IndexDef {
+            fn def(&self) -> #crate_name::IndexDef {
                 match self {
                     #(#index_defs,)*
                 }
@@ -132,9 +133,9 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
 
         #[automatically_derived]
 
-        impl #impl_generics magritte::prelude::IndexType for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::IndexType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
-                <#parent as magritte::prelude::NamedType>::table_name()
+                <#parent as #crate_name::NamedType>::table_name()
             }
 
             fn index_name(&self) -> &str {

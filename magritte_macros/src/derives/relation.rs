@@ -3,6 +3,7 @@ use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
 use syn::{DeriveInput, Path};
+use macro_helpers::get_crate_name;
 
 fn strip_relations_suffix(ident: &syn::Ident) -> Path {
     let name = ident.to_string();
@@ -17,7 +18,7 @@ fn strip_relations_suffix(ident: &syn::Ident) -> Path {
 pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = split_generics(&input);
-    
+    let crate_name = get_crate_name(false);
     let data = match &input.data {
         syn::Data::Enum(data) => data,
         _ => {
@@ -61,14 +62,14 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
             .map(|c| quote!(Some(#c.to_string())))
             .unwrap_or_else(|| quote!(None));
 
-        let from_str = quote!(<#parent as magritte::prelude::NamedType>::table_name());
-        let to_str = quote!(<#to_table as magritte::prelude::NamedType>::table_name());
-        let edge_str = quote!(<#edge_table as magritte::prelude::NamedType>::table_name());
+        let from_str = quote!(<#parent as #crate_name::NamedType>::table_name());
+        let to_str = quote!(<#to_table as #crate_name::NamedType>::table_name());
+        let edge_str = quote!(<#edge_table as #crate_name::NamedType>::table_name());
         let from = quote!(format!("{}:{}", #from_str, #in_id));
         let to = quote!(format!("{}:{}", #to_str, #out_id));
         let def = quote! {
             #ident::#variant_name => {
-                RelationDef::new(#from, #to, #edge_str, #content)
+                #crate_name::RelationDef::new(#from, #to, #edge_str, #content)
             }
         };
 
@@ -79,20 +80,20 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
         relation_to.push(to);
     }
 
-    let err_type = quote!(magritte::RelationFromStrErr);
+    let err_type = quote!(#crate_name::RelationFromStrErr);
     let trait_impls = quote! {
-        impl #impl_generics magritte::prelude::HasRelations for #parent #type_generics #where_clause {
-            pub fn relations() -> impl Iterator<Item = #ident #type_generics> {
+        impl #impl_generics #crate_name::HasRelations for #parent #type_generics #where_clause {
+            fn relations() -> Vec<#ident #type_generics> {
                 use strum::IntoEnumIterator;
-                #ident::iter()
+                #ident::iter().collect::<Vec<_>>()
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::RelationTrait for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::RelationTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
-            fn def(&self) -> RelationDef {
+            fn def(&self) -> #crate_name::RelationDef {
                 match self {
                     #(#relation_defs,)*
                 }
@@ -100,7 +101,7 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::RelationType for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::RelationType for #ident #type_generics #where_clause {
             fn relation_via(&self) -> &str {
                 match self {
                     #(#ident::#relation_variants => #relation_via,)*

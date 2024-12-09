@@ -1,95 +1,75 @@
-use anyhow::Result;
-use magritte::prelude::{EdgeTrait, SurrealDB, TableTrait};
-use crate::schema::snapshot::SchemaSnapshot;
-use crate::types::MigrationContext;
+use super::Result;
+use crate::types::FlexibleDateTime;
+use magritte::SchemaSnapshot;
+use std::path::PathBuf;
+use crate::snapshot::save_to_file;
 
-/// Manager for handling schema operations and migrations
-pub struct SchemaManager {
-    ctx: MigrationContext,
+pub struct MigrationManager {
+    pub migrations_dir: PathBuf,
 }
 
-impl SchemaManager {
-    pub fn new(db: SurrealDB, namespace: String, database: String) -> Self {
-        Self {
-            ctx: MigrationContext {
-                db,
-                namespace,
-                database,
+impl MigrationManager {
+    pub fn new(migrations_dir: PathBuf) -> Self {
+        Self { migrations_dir }
+    }
+
+    pub fn create_new_migration(&self, snapshot: &SchemaSnapshot) -> Result<String> {
+        // Determine the next migration number based on existing files
+        let next_number = self.next_migration_number()?;
+        let timestamp = Self::get_current_timestamp();
+        let migration_name = format!("{:04}_{}", next_number, timestamp);
+
+        let json_path = self
+            .migrations_dir
+            .join(format!("{}_schema.json", &migration_name));
+        save_to_file(&snapshot, &json_path)?;
+
+        Ok(migration_name)
+    }
+
+    fn next_migration_number(&self) -> Result<usize> {
+        let entries = std::fs::read_dir(&self.migrations_dir)?;
+        let max_num = entries
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                e.path()
+                    .file_stem()
+                    .map(|f| f.to_string_lossy().into_owned())
+            })
+            .filter_map(|filename| {
+                filename
+                    .split('_')
+                    .next()
+                    .and_then(|num_str| num_str.parse::<usize>().ok())
+            })
+            .max()
+            .unwrap_or(0);
+        Ok(max_num + 1)
+    }
+
+    fn generate_surql(&self, snapshot: &SchemaSnapshot) -> Result<String> {
+        let mut statements = Vec::new();
+        for table in snapshot.tables.values() {
+            statements.push(table.define_table_statement.clone());
+            for field_stmt in table.fields.values() {
+                statements.push(field_stmt.clone());
+            }
+            for idx_stmt in table.indexes.values() {
+                statements.push(idx_stmt.clone());
+            }
+            for evt_stmt in table.events.values() {
+                statements.push(evt_stmt.clone());
             }
         }
+
+        for edge in snapshot.edges.values() {
+            statements.push(edge.define_edge_statement.clone());
+        }
+
+        Ok(statements.join("\n"))
     }
 
-    /// Get the current schema snapshot
-    pub async fn get_current_schema<T, E> (&self) -> Result<SchemaSnapshot<T, E>> where T: TableTrait, E: EdgeTrait{
-        SchemaSnapshot::capture(&self.ctx).await
-    }
-
-    /// Check if a table exists
-    pub async fn has_table(&self, table: &str) -> Result<bool> {
-        let result: Option<serde_json::Value> = self.ctx.db
-            .query("INFO FOR TABLE $table")
-            .bind(("table", table))
-            .await?
-            .take(0)?;
-        
-        Ok(result.is_some())
-    }
-
-    /// Check if a field exists on a table
-    pub async fn has_field(&self, table: &str, field: &str) -> Result<bool> {
-        let result: Option<serde_json::Value> = self.ctx.db
-            .query("INFO FOR FIELD $field ON TABLE $table")
-            .bind(("table", table))
-            .bind(("field", field))
-            .await?
-            .take(0)?;
-        
-        Ok(result.is_some())
-    }
-
-    /// Check if an index exists on a table
-    pub async fn has_index(&self, table: &str, index: &str) -> Result<bool> {
-        let result: Option<serde_json::Value> = self.ctx.db
-            .query("INFO FOR INDEX $index ON TABLE $table")
-            .bind(("table", table))
-            .bind(("index", index))
-            .await?
-            .take(0)?;
-        
-        Ok(result.is_some())
-    }
-
-    /// Check if an event exists on a table
-    pub async fn has_event(&self, table: &str, event: &str) -> Result<bool> {
-        let result: Option<serde_json::Value> = self.ctx.db
-            .query("INFO FOR EVENT $event ON TABLE $table")
-            .bind(("table", table))
-            .bind(("event", event))
-            .await?
-            .take(0)?;
-        
-        Ok(result.is_some())
-    }
-
-    /// Execute a schema statement
-    pub async fn execute(&self, stmt: impl AsRef<str>) -> Result<()> {
-        self.ctx.db.query(stmt.as_ref()).await?;
-        Ok(())
-    }
-
-    /// Get the migration context
-    pub fn context(&self) -> &MigrationContext {
-        &self.ctx
-    }
-
-    /// Save current schema state to a snapshot file
-    pub async fn save_snapshot(&self, base_dir: impl AsRef<std::path::Path>) -> Result<()> {
-        let snapshot = self.get_current_schema().await?;
-        snapshot.save(&self.ctx, base_dir).await
-    }
-
-    /// Load a schema snapshot from a file
-    pub fn load_snapshot(path: impl AsRef<std::path::Path>) -> Result<SchemaSnapshot> {
-        SchemaSnapshot::load_from_file(path)
+    fn get_current_timestamp() -> String {
+        FlexibleDateTime::now().to_string()
     }
 }

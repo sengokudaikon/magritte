@@ -3,13 +3,15 @@
 //! This module contains operations related to inserting records into tables.
 
 use std::fmt::{Debug, Display};
+use std::process::id;
 use std::time::Duration;
 
 use crate::{FromTarget,RecordType, ReturnType, SurrealDB, SurrealId};
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::Serialize;
-use tracing::instrument;
+use surrealdb::sql::Value;
+use tracing::{error, info, instrument};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -31,7 +33,7 @@ where
     pub(crate) parameters: Vec<(String, serde_json::Value)>,
     pub(crate) parallel: bool,
     pub(crate) timeout: Option<Duration>,
-    pub(crate) return_type: ReturnType,
+    pub(crate) return_type: Option<ReturnType>,
     pub(crate) as_relation: bool,
     pub(crate) ignore: bool,
     phantom: std::marker::PhantomData<T>,
@@ -122,6 +124,14 @@ where
         self.ignore = true;
         self
     }
+    pub fn timeout(mut self, duration: Duration) -> Self {
+        self.timeout = Some(duration);
+        self
+    }
+    pub fn parallel(mut self) -> Self {
+        self.parallel = true;
+        self
+    }
     pub(crate) fn new() -> Self {
         Self {
             targets: None,
@@ -138,11 +148,180 @@ where
         }
     }
 
-    fn build(&self) -> Result<String> {
-        todo!()
+    pub fn build(&self) -> Result<String> {
+        let mut query = String::new();
+        query.push_str("INSERT ");
+
+        if self.only {
+            query.push_str("ONLY ");
+        } else if let Some(targets) = &self.targets {
+            if !targets.is_empty() {
+                for v in targets {
+                    query.push_str(&format!("{},", v.to_string().as_str()));
+                }
+            }
+        }
+
+        query.push_str("INTO ");
+        query.push_str(T::table_name());
+
+        if self.as_relation {
+            query.push_str(" RELATION ");
+        }
+        if self.ignore {
+            query.push_str("IGNORE ");
+        }
+
+
+        if let Some(content) = &self.content {
+            match content {
+                Content::Value(value) => {
+                    query.push_str(" ");
+                    query.push_str(&process_value(value)?);
+                }
+                Content::Set(sets) => {
+                    query.push_str(" (");
+                    query.push_str(&sets.iter().map(|(field, _)| field.strip_prefix("\"").unwrap().strip_suffix("\"").unwrap()).collect::<Vec<_>>().join(", "));
+                    query.push_str(") VALUES (");
+                    query.push_str(&sets.iter().map(|(field, value)|{
+                        if field == "id" {
+                            strip_id(value).unwrap_or_else(|_| serde_json::to_string(value).unwrap())
+                        } else {
+                            serde_json::to_string(value).unwrap()
+                        }
+                    }).collect::<Vec<_>>().join(", "));
+                    query.push_str(")");
+
+                    // Add ON DUPLICATE KEY UPDATE if present
+                    if !sets.is_empty() {
+                        query.push_str(" ON DUPLICATE KEY UPDATE ");
+                        query.push_str(&sets.iter().map(|(field, value)| {
+                            format!("{} = {}", field, serde_json::to_string(value).unwrap())
+                        }).collect::<Vec<_>>().join(", "));
+                    }
+                }
+            }
+        }
+
+        if let Some(return_type) = &self.return_type {
+            match return_type {
+                ReturnType::All => query.push_str(" RETURN AFTER"),
+                ReturnType::None => query.push_str(" RETURN NONE"),
+                ReturnType::Before => query.push_str(" RETURN BEFORE"),
+                ReturnType::After => query.push_str(" RETURN AFTER"),
+                ReturnType::Diff => query.push_str(" RETURN DIFF"),
+                ReturnType::Fields(fields) => {
+                    query.push_str(" RETURN ");
+                    query.push_str(&fields.join(", "));
+                }
+            }
+        }
+
+        // Add TIMEOUT if specified
+        if let Some(timeout) = &self.timeout {
+            query.push_str(&format!(" TIMEOUT {}", timeout.as_millis()));
+        }
+
+        // Add PARALLEL if specified
+        if self.parallel {
+            query.push_str(" PARALLEL");
+        }
+
+        query.push(';');
+        Ok(query)
     }
 
-    async fn execute(self, _conn: SurrealDB) -> Result<Vec<T>> {
-        todo!()
+    pub async fn execute(self, conn: SurrealDB) -> Result<Vec<T>> {
+        let query = self.build()?;
+        info!("Executing query: {}", query);
+        let mut surreal_query = conn.query(query);
+
+        // Bind all parameters
+        for (name, value) in self.parameters {
+            surreal_query = surreal_query.bind((name, value));
+        }
+
+        let res = surreal_query.await?.take(0);
+        match res {
+            Ok(res) => {
+
+                Ok(res)
+            },
+            Err(e) => {
+                error!("Query execution failed: {:?}", e);
+                Err(anyhow!(e))
+            }
+        }
+    }
+}
+fn unquote_keys(value: &serde_json::Value) -> Result<String> {
+    match value {
+        serde_json::Value::Object(map) => {
+            let entries: Vec<String> = map
+                .iter()
+                .map(|(k, v)| {
+                    let value_str = match (k.as_str(), v) {
+                        ("id", serde_json::Value::Object(id_obj)) => {
+                            // Handle the special case for id
+                            if let Some(serde_json::Value::Object(inner_obj)) = id_obj.get("id") {
+                                if let Some(id_value) = inner_obj.values().next() {
+                                    return Ok(format!("id: {}", value_to_string(id_value)?));
+                                }
+                            }
+                            Err(anyhow!("Invalid id format"))
+                        },
+                        (_, v) => value_to_string(v),
+                    }?;
+                    Ok(format!("{}: {}", k, value_str))
+                })
+                .collect::<Result<Vec<String>>>()?;
+            Ok(format!("{{{}}}", entries.join(", ")))
+        }
+        serde_json::Value::Array(arr) => {
+            let values: Vec<String> = arr
+                .iter()
+                .map(|v| unquote_keys(v))
+                .collect::<Result<Vec<String>>>()?;
+            Ok(format!("[{}]", values.join(", ")))
+        }
+        _ => value_to_string(value),
+    }
+}
+fn value_to_string(value: &serde_json::Value) -> Result<String> {
+    match value {
+        serde_json::Value::String(s) => Ok(format!("\"{}\"", s)),
+        serde_json::Value::Number(n) => Ok(n.to_string()),
+        serde_json::Value::Bool(b) => Ok(b.to_string()),
+        serde_json::Value::Null => Ok("null".to_string()),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => unquote_keys(value),
+    }
+}
+fn strip_id(value: &serde_json::Value) -> Result<String> {
+    if let serde_json::Value::Object(id_obj) = value {
+        if let Some(serde_json::Value::Object(inner_obj)) = id_obj.get("id") {
+            if let Some(id_value) = inner_obj.values().next() {
+                return value_to_string(id_value);
+            }
+        }
+    }
+    Err(anyhow!("Invalid id format"))
+}
+fn process_value( value: &serde_json::Value) -> Result<String> {
+    match value {
+        serde_json::Value::Object(map) => {
+            let entries: Vec<String> = map
+                .iter()
+                .map(|(k, v)| {
+                    let value_str = if k == "id" {
+                        strip_id(v).unwrap_or_else(|_| serde_json::to_string(v).unwrap())
+                    } else {
+                        serde_json::to_string(v).unwrap()
+                    };
+                    Ok(format!("{}: {}", k, value_str))
+                })
+                .collect::<Result<Vec<String>>>()?;
+            Ok(format!("{{{}}}", entries.join(", ")))
+        }
+        _ => Err(anyhow!("Expected an object for INSERT")),
     }
 }

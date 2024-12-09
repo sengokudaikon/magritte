@@ -138,6 +138,10 @@ pub struct Column {
     #[deluxe(default)]
     pub readonly: bool,
     #[deluxe(default)]
+    pub overwrite: bool,
+    #[deluxe(default)]
+    pub if_not_exists: bool,
+    #[deluxe(default)]
     pub comment: Option<String>,
 }
 
@@ -154,6 +158,8 @@ impl ToTokens for Column {
             assert,
             permissions,
             readonly,
+            overwrite,
+            if_not_exists,
             comment,
         } = self;
         let expanded = quote! {
@@ -168,6 +174,8 @@ impl ToTokens for Column {
                 assert: #assert,
                 permissions: #permissions,
                 readonly: #readonly,
+                overwrite: #overwrite,
+                if_not_exists: #if_not_exists,
                 comment: #comment,
             }
         };

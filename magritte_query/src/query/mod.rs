@@ -1,7 +1,6 @@
 use crate::RecordType;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use std::marker::PhantomData;
 pub mod alter;
 pub mod create;
 pub mod delete;
@@ -24,9 +23,7 @@ pub use upsert::*;
 
 /// Shorthand for constructing any Table query
 #[derive(Debug, Clone)]
-pub struct Query<T> {
-    phantom_data: PhantomData<T>,
-}
+pub struct Query;
 
 /// All available types of Table query
 #[derive(Debug, Clone)]
@@ -41,7 +38,7 @@ where
     Update(UpdateStatement<T>),
     Delete(DeleteStatement<T>),
     Upsert(UpsertStatement<T>),
-    Relate(RelateStatement<T>),
+    Relate(RelateStatement),
     Info(InfoStatement),
 }
 
@@ -55,15 +52,12 @@ where
     UpdateStatement(UpdateStatement<T>),
     DeleteStatement(DeleteStatement<T>),
     UpsertStatement(UpsertStatement<T>),
-    RelateStatement(RelateStatement<T>),
+    RelateStatement(RelateStatement),
 }
 
-impl<T> Query<T>
-where
-    T: RecordType,
-{
+impl Query {
     /// CREATE statement [`CreateStatement`]
-    pub fn create() -> CreateStatement<T> {
+    pub fn create<T: RecordType>() -> CreateStatement<T> {
         CreateStatement::new()
     }
 
@@ -72,31 +66,31 @@ where
         AlterStatement::new()
     }
     /// SELECT statement [`SelectStatement`]
-    pub fn select() -> SelectStatement<T> {
+    pub fn select<T: RecordType>() -> SelectStatement<T> {
         SelectStatement::new()
     }
 
     /// INSERT statement [`InsertStatement`]
-    pub fn insert() -> InsertStatement<T> {
+    pub fn insert<T: RecordType>() -> InsertStatement<T> {
         InsertStatement::new()
     }
 
     /// RELATE statement [`RelateStatement`]
-    pub fn relate() -> RelateStatement<T> {
+    pub fn relate() -> RelateStatement {
         RelateStatement::new()
     }
 
     /// UPDATE statement [`UpdateStatement`]
-    pub fn update() -> UpdateStatement<T> {
+    pub fn update<T: RecordType>() -> UpdateStatement<T> {
         UpdateStatement::new()
     }
 
     /// DELETE statement [`DeleteStatement`]
-    pub fn delete() -> DeleteStatement<T> {
+    pub fn delete<T: RecordType>() -> DeleteStatement<T> {
         DeleteStatement::new()
     }
     /// UPSERT statement [`UpsertStatement`]
-    pub fn upsert() -> UpsertStatement<T> {
+    pub fn upsert<T: RecordType>() -> UpsertStatement<T> {
         UpsertStatement::new()
     }
 }

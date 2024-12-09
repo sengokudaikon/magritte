@@ -3,6 +3,7 @@ use deluxe::ExtractAttributes;
 use proc_macro2::TokenStream;
 use quote::{quote, format_ident};
 use syn::{parse_quote, Data, DeriveInput};
+use macro_helpers::get_crate_name;
 
 fn strip_events_suffix(ident: &syn::Ident) -> syn::Path {
     let name = ident.to_string();
@@ -17,7 +18,7 @@ fn strip_events_suffix(ident: &syn::Ident) -> syn::Path {
 pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = split_generics(&input);
-    
+    let crate_name = get_crate_name(false);
     let data = match &input.data {
         Data::Enum(data) => data,
         _ => {
@@ -27,7 +28,7 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
             ));
         }
     };
-    let err_type = quote!(magritte::prelude::EventFromStrErr);
+    let err_type = quote!(#crate_name::EventFromStrErr);
 
     let mut variants = Vec::new();
     let mut defs = Vec::new();
@@ -64,9 +65,9 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
         let if_not_exists = attrs.if_not_exists;
 
         let def = quote! {
-            #ident::#variant_name => EventDef::new(
+            #ident::#variant_name => #crate_name::EventDef::new(
                 #event_name,
-                <#parent as magritte::prelude::NamedType>::table_name(),
+                <#parent as #crate_name::NamedType>::table_name(),
                 #when_str,
                 #then_str,
                 #comment,
@@ -83,18 +84,18 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
     // Generate the enum and all implementations separately
 
     let trait_impls = quote! {
-        impl #impl_generics magritte::prelude::HasEvents for #parent #type_generics #where_clause {
-            pub fn events() -> impl Iterator<Item = #ident #type_generics> {
+        impl #impl_generics #crate_name::HasEvents for #parent #type_generics #where_clause {
+            fn events() -> Vec<#ident #type_generics> {
                 use strum::IntoEnumIterator;
-                #ident::iter()
+                #ident::iter().collect::<Vec<_>>()
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::EventTrait for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::EventTrait for #ident #type_generics #where_clause {
             type EntityName = #parent #type_generics;
 
-            fn def(&self) -> magritte::prelude::EventDef {
+            fn def(&self) -> #crate_name::EventDef {
                 match self {
                     #(#defs,)*
                 }
@@ -102,9 +103,9 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::EventType for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::EventType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
-                <#parent as magritte::prelude::NamedType>::table_name()
+                <#parent as #crate_name::NamedType>::table_name()
             }
 
             fn event_name(&self) -> &str {

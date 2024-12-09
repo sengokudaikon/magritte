@@ -82,10 +82,19 @@ impl DefineEventStatement {
         }
 
         stmt.push_str(" WHEN ");
-        stmt.push_str(&*cleanup(&self.when));
+        if let Some(when) = &self.when {
+            stmt.push_str(&*cleanup(when));
+        } else {
+            bail!("When must be specified")
+        }
+
 
         stmt.push_str(" THEN ");
-        stmt.push_str(&*cleanup(&self.then));
+        if let Some(then) = &self.then {
+            stmt.push_str(&*cleanup(then));
+        } else {
+            bail!("Then must be specified")
+        }
 
         if let Some(comment) = &self.comment {
             stmt.push_str(&format!(" COMMENT \"{}\"", comment));

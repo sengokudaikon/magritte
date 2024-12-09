@@ -1,6 +1,6 @@
 use magritte_query::types::{ColumnType, NamedType, Permission};
-use std::fmt::Display;
 use magritte_query::{Define, DefineFieldStatement};
+use std::fmt::Display;
 
 /// Defines a Column for an Entity
 #[derive(Debug, Clone, PartialEq)]
@@ -15,6 +15,8 @@ pub struct ColumnDef {
     pub(crate) value: Option<String>,
     pub(crate) readonly: bool,
     pub(crate) flexible: bool,
+    pub(crate) overwrite: bool,
+    pub(crate) if_not_exists: bool,
     pub(crate) comment: Option<String>,
 }
 
@@ -28,6 +30,7 @@ pub trait ColumnTrait: ColumnType {
 }
 
 impl ColumnDef {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<String>,
         table_name: impl Into<String>,
@@ -39,6 +42,8 @@ impl ColumnDef {
         null: bool,
         readonly: bool,
         flexible: bool,
+        overwrite: bool,
+        if_not_exists: bool,
         comment: Option<String>,
     ) -> Self {
         Self {
@@ -46,15 +51,17 @@ impl ColumnDef {
             table_name: table_name.into(),
             col_type: col_type.into(),
             null,
-            default: default.into(),
-            assert: assert.into(),
+            default,
+            assert,
             permissions: permissions
                 .as_ref()
-                .map(|pers| pers.into_iter().map(|p| Permission::from(p)).collect()),
+                .map(|pers| pers.iter().map(Permission::from).collect()),
             value,
             readonly,
             flexible,
-            comment: comment.into(),
+            overwrite,
+            if_not_exists,
+            comment,
         }
     }
 
@@ -83,7 +90,7 @@ impl ColumnDef {
     }
 
     pub fn comment(&self) -> Option<&str> {
-        self.comment.as_ref().map(|c| c.as_str())
+        self.comment.as_deref()
     }
 
     pub fn permissions(&self) -> &[Permission] {
@@ -91,14 +98,14 @@ impl ColumnDef {
     }
 
     pub fn default(&self) -> Option<&str> {
-        self.default.as_ref().map(|d| d.as_str())
+        self.default.as_deref()
     }
 
     pub fn assert(&self) -> Option<&str> {
-        self.assert.as_ref().map(|a| a.as_str())
+        self.assert.as_deref()
     }
 
-    pub fn to_statement<T: ColumnTrait> (&self) -> DefineFieldStatement {
+    pub fn to_statement(&self) -> DefineFieldStatement {
         let mut def = Define::field();
         def = def.name(self.name.clone());
         def = def.table_name(self.table_name.clone());

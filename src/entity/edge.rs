@@ -1,10 +1,9 @@
 use crate::entity::HasColumns;
-use crate::prelude::ColumnTrait;
-use magritte_query::define::define_table::DefineTableStatement;
+use crate::ColumnTrait;
+use magritte_query::define_edge::DefineEdgeStatement;
 use magritte_query::types::{EdgeType, Permission, SchemaType, TableType};
 use std::fmt::{Debug, Display};
 use std::time::Duration;
-use magritte_query::define_edge::DefineEdgeStatement;
 
 /// Defines an Edge for a Table
 #[derive(Debug, Clone, PartialEq)]
@@ -38,7 +37,7 @@ pub trait EdgeTrait: EdgeType + HasColumns {
         self.def_owned().to_statement()
     }
 
-    fn columns(&self) -> impl IntoIterator<Item = impl ColumnTrait>
+    fn columns() -> impl IntoIterator<Item = impl ColumnTrait>
     where
         Self: Sized,
     {
@@ -47,6 +46,7 @@ pub trait EdgeTrait: EdgeType + HasColumns {
 }
 
 impl EdgeDef {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<String>,
         from: impl Into<String>,
@@ -66,7 +66,7 @@ impl EdgeDef {
             schema_type: SchemaType::from(schema_type.into()),
             permissions: permissions
                 .as_ref()
-                .map(|pers| pers.iter().map(|c| Permission::from(c)).collect()),
+                .map(|pers| pers.iter().map(Permission::from).collect()),
             from: from.into(),
             to: to.into(),
             as_select,
@@ -106,7 +106,7 @@ impl EdgeDef {
         self.if_not_exists
     }
     pub fn as_select(&self) -> Option<&str> {
-        self.as_select.as_ref().map(|s| s.as_str())
+        self.as_select.as_deref()
     }
 
     pub fn changefeed(&self) -> Option<(Duration, bool)> {
@@ -114,7 +114,7 @@ impl EdgeDef {
     }
 
     pub fn comment(&self) -> Option<&str> {
-        self.comment.as_ref().map(|s| s.as_str())
+        self.comment.as_deref()
     }
     pub fn to_statement<T: EdgeTrait>(&self) -> DefineEdgeStatement<T> {
         let mut def = DefineEdgeStatement::new();

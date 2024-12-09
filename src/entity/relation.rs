@@ -55,6 +55,6 @@ impl RelationDef {
         self.to.as_str()
     }
     pub fn content(&self) -> Option<&str> {
-        self.content.as_ref().map(|c| c.as_str())
+        self.content.as_deref()
     }
 }

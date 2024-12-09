@@ -18,7 +18,7 @@ pub struct Table<T> {
 
 /// All available types of Table statement
 #[derive(Debug, Clone)]
-pub enum TableStatement<T>  where T:RecordType{
+pub enum TableStatement<T> where T:TableType{
     Define(DefineTableStatement<T>),
     Alter(AlterStatement),
     Delete(DeleteStatement<T>),
@@ -26,7 +26,7 @@ pub enum TableStatement<T>  where T:RecordType{
 }
 
 impl<T> Table<T>
-where T:RecordType
+where T:TableType
 {
     pub fn define() -> DefineTableStatement<T> {
         DefineTableStatement::new()
@@ -43,7 +43,7 @@ where T:RecordType
 }
 
 impl<T> TableStatement<T>
-where T:RecordType
+where T:TableType
 {
     /// Build corresponding SQL statement for certain database backend and return SQL string
     pub fn build(&self) -> anyhow::Result<String> {

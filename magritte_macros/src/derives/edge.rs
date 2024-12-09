@@ -6,6 +6,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput};
 use syn::parse::Parser;
+use macro_helpers::get_crate_name;
 
 pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
@@ -21,7 +22,7 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
     let (impl_generics, type_generics, where_clause) = split_generics(&input);
     let attrs = Edge::extract_attributes(&mut input.attrs)?;
-
+    let crate_name = get_crate_name(false);
     // Get the actual edge name that will be used - either from edge(name=) or struct name
     let edge_name = attrs
         .name
@@ -76,10 +77,10 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
     // Generate column enum and its implementations
     let column_impl = expand_derive_column(input.clone())?;
     let def = quote! {
-        EdgeDef::new(
+        #crate_name::EdgeDef::new(
                     #edge_name_lit.to_string(),
-                    <#from_type as magritte::prelude::NamedType>::table_name(),
-                    <#to_type as magritte::prelude::NamedType>::table_name(),
+                    <#from_type as #crate_name::NamedType>::table_name(),
+                    <#to_type as #crate_name::NamedType>::table_name(),
                     #schema_type,
                     #permissions,
                     #overwrite,
@@ -96,20 +97,20 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
         #[automatically_derived]
 
-        impl #impl_generics magritte::prelude::EdgeTrait for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::EdgeTrait for #ident #type_generics #where_clause {
             type EntityFrom = #from_type;
             type EntityTo = #to_type;
 
-            fn def(&self) -> EdgeDef {
+            fn def() -> #crate_name::EdgeDef {
                 #def
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::RecordType for #ident #type_generics #where_clause {}
+        impl #impl_generics #crate_name::RecordType for #ident #type_generics #where_clause {}
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::NamedType for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::NamedType for #ident #type_generics #where_clause {
             fn table_name() -> &'static str {
                 #edge_name_lit
             }
@@ -117,13 +118,13 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
         #[automatically_derived]
 
-        impl #impl_generics magritte::prelude::EdgeType for #ident #type_generics #where_clause {
+        impl #impl_generics #crate_name::EdgeType for #ident #type_generics #where_clause {
             fn edge_from(&self) -> &str {
-                <#from_type as magritte::prelude::NamedType>::table_name()
+                <#from_type as #crate_name::NamedType>::table_name()
             }
 
             fn edge_to(&self) -> &str {
-                <#to_type as magritte::prelude::NamedType>::table_name()
+                <#to_type as #crate_name::NamedType>::table_name()
             }
 
             fn is_enforced(&self) -> bool {
@@ -149,6 +150,12 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
             #[inline]
             fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
                 write!(f, "{}", #edge_name_lit)
+            }
+        }
+
+        inventory::submit! {
+            #crate_name::EdgeRegistration {
+                builder: || #crate_name::edge_snapshot::<#ident #type_generics>()
             }
         }
     })

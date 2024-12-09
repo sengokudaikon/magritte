@@ -9,7 +9,7 @@ use std::time::Duration;
 use tracing::{error, info};
 use crate::define_table::AsSelect;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct DefineEdgeStatement<T: EdgeType> {
     pub(crate) name: Option<String>,
     pub(crate) schema_type: Option<SchemaType>,
@@ -24,6 +24,26 @@ pub struct DefineEdgeStatement<T: EdgeType> {
     pub(crate) enforced: bool,
     pub(crate) comment: Option<String>,
     _marker: std::marker::PhantomData<T>,
+}
+
+impl <T> Default for DefineEdgeStatement<T> where T: EdgeType {
+    fn default() -> Self {
+        Self {
+            name: None,
+            schema_type: None,
+            from: None,
+            to: None,
+            overwrite: false,
+            if_not_exists: false,
+            permissions: None,
+            as_select: None,
+            changefeed: None,
+            drop: false,
+            enforced: false,
+            comment: None,
+            _marker: Default::default(),
+        }
+    }
 }
 
 impl <T> DefineEdgeStatement<T> where T: EdgeType {
@@ -134,8 +154,13 @@ where
         self
     }
 
+    pub fn enforced(mut self) -> Self {
+        self.enforced = true;
+        self
+    }
+
     pub fn new() -> Self {
-        Default::default()
+        Self::default()
     }
 
     pub fn build(&self) -> anyhow::Result<String> {

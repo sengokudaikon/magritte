@@ -1,29 +1,8 @@
+use anyhow::{anyhow, Result};
 use magritte_query::{
     DeleteStatement, HasId, InsertStatement, Query, RecordType, SelectStatement, SurrealId,
     UpdateStatement, UpsertStatement,
 };
-use anyhow::{anyhow, Result};
-/// for relations:
-/// SELECT ->?->? AS relations FROM something FETCH relations
-/// results in attached tables from the relation
-///
-/// SELECT
-///     *,
-///     ->? AS alias1,
-///     <-? AS alias2,
-///     <->? AS alias3
-/// FROM something
-/// FETCH alias1, alias2, alias3
-/// results in just the keys for alias1,alias2,alias3 globbed
-///
-/// SELECT
-///     *,
-///     ->?->? AS alias1,
-///     <-?<-? AS alias2,
-///     <->?<->? AS alias3
-/// FROM something
-/// FETCH alias1, alias2, alias3
-/// results in attached tables from all relations?
 
 pub trait SurrealCrud<T>: Sized
 where
@@ -63,10 +42,10 @@ where
     T: Sized + RecordType + HasId,
 {
     fn insert(self) -> Result<InsertStatement<T>> {
-        Ok(Query::insert().content(self).map_err( anyhow::Error::from)?)
+        Query::insert().content(self).map_err(anyhow::Error::from)
     }
     fn insert_by_id<I: Into<SurrealId<T>>>(self, id: I) -> Result<InsertStatement<T>> {
-        Ok(Query::insert().where_id(id.into()).content(self)?)
+        Query::insert().where_id(id.into()).content(self).map_err(anyhow::Error::from)
     }
 
     fn get(self) -> Result<SelectStatement<T>> {
@@ -74,11 +53,17 @@ where
     }
 
     fn upsert(self) -> anyhow::Result<UpsertStatement<T>> {
-        Ok(Query::upsert().where_id(self.id()).content(self).map_err(anyhow::Error::from)?)
+        Query::upsert()
+            .where_id(self.id())
+            .content(self)
+            .map_err(anyhow::Error::from)
     }
 
     fn update(self) -> anyhow::Result<UpdateStatement<T>> {
-        Ok(Query::update().where_id(self.id()).content(self).map_err(anyhow::Error::from)?)
+        Query::update()
+            .where_id(self.id())
+            .content(self)
+            .map_err(anyhow::Error::from)
     }
 
     fn find_by_id<I: Into<SurrealId<T>>>(id: I) -> anyhow::Result<SelectStatement<T>> {

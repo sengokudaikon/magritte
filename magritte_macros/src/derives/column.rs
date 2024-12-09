@@ -10,6 +10,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde_json::map;
 use syn::{Data, DeriveInput, ExprArray, Field, Fields, parse_quote};
+use macro_helpers::get_crate_name;
 
 fn extract_field_type(field: &Field) -> String {
     type_to_surrealdb_type(&field.ty).to_string()
@@ -49,7 +50,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     let mut column_defs = Vec::new();
     let mut column_names = Vec::new();
     let mut column_types = Vec::new();
-    
+    let crate_name = get_crate_name(false);
     let entity_type: syn::Type = parse_quote!(#entity_name);
     for field in fields {
         let field_name = field.ident.as_ref().unwrap();
@@ -105,7 +106,8 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             .map(|expr| quote!(#expr));
         let readonly = field_attrs.readonly;
         let flexible = field_attrs.flexible;
-
+        let overwrite = field_attrs.overwrite;
+        let if_not_exists = field_attrs.if_not_exists;
         let default_value = match default {
             Some(d) => quote!(Some(#d.to_string())),
             None => quote!(None),
@@ -127,7 +129,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         };
 
         let def = quote! {
-            #column_enum_name::#variant_name => ColumnDef::new(
+            #column_enum_name::#variant_name => #crate_name::ColumnDef::new(
                 #column_name,
                 #table_name,
                 #type_name,
@@ -138,6 +140,8 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
                 #is_nullable,
                 #readonly,
                 #flexible,
+                #overwrite,
+                #if_not_exists,
                 #comment_value
             )
         };
@@ -147,11 +151,11 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         column_types.push(type_name);
     }
 
-    let err_type = quote!(magritte::prelude::ColumnFromStrErr);
+    let err_type = quote!(#crate_name::ColumnFromStrErr);
     
     Ok(quote! {
-        impl #impl_generics magritte::prelude::HasColumns for #entity_type #type_generics #where_clause {
-            pub fn columns() -> impl Iterator<Item = #column_enum_name #type_generics> {
+        impl #impl_generics #crate_name::HasColumns for #entity_type #type_generics #where_clause {
+            fn columns() -> impl Iterator<Item = #column_enum_name #type_generics> {
                 use strum::IntoEnumIterator;
                 #column_enum_name::iter()
             }
@@ -161,33 +165,28 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, serde::Serialize, serde::Deserialize)]
         pub enum #column_enum_name #type_generics #where_clause {
             #(#column_variants),*,
-            #[doc(hidden)]
-            __Phantom(::std::marker::PhantomData<#entity_type>)
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::ColumnTrait for #column_enum_name #type_generics #where_clause {
+        impl #impl_generics #crate_name::ColumnTrait for #column_enum_name #type_generics #where_clause {
             type EntityName = #entity_type;
 
-            fn def(&self) -> magritte::prelude::ColumnDef {
+            fn def(&self) -> #crate_name::ColumnDef {
                 match self {
                     #(#column_defs,)*
-                    #column_enum_name::__Phantom(_) => unreachable!()
                 }
             }
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::ColumnTypeLite for #column_enum_name #type_generics #where_clause {
-
+        impl #impl_generics #crate_name::ColumnTypeLite for #column_enum_name #type_generics #where_clause {
         }
 
         #[automatically_derived]
-        impl #impl_generics magritte::prelude::ColumnType for #column_enum_name #type_generics #where_clause {
+        impl #impl_generics #crate_name::ColumnType for #column_enum_name #type_generics #where_clause {
             fn column_name(&self) -> & str {
                 match self {
                     #(#column_enum_name::#column_variants => #column_names,)*
-                    #column_enum_name::__Phantom(_) => unreachable!()
                 }
             }
 
@@ -199,7 +198,6 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             fn column_type(&self) -> & str {
                 match self {
                     #(#column_enum_name::#column_variants => #column_types,)*
-                    #column_enum_name::__Phantom(_) => unreachable!()
                 }
             }
         }
@@ -221,7 +219,6 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
                     #(#column_enum_name::#column_variants => write!(f, "{}", #column_names),)*
-                    #column_enum_name::__Phantom(_) => unreachable!(),
                 }
             }
         }
@@ -231,7 +228,6 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
             fn as_ref(&self) -> &str {
                 match self {
                     #(#column_enum_name::#column_variants => #column_names,)*
-                    #column_enum_name::__Phantom(_) => unreachable!(),
                 }
             }
         }

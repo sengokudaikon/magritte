@@ -1,9 +1,8 @@
-use magritte::prelude::*;
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use pretty_assertions::assert_eq;
-use super::{Order, Product, User};
-use super::edge::OrderProduct;
-use super::edge::UserOrder;
+use magritte::RelationTrait;
+use magritte_macros::Relation;
 
 // Test relations for Order and Product
 #[derive(Relation, Serialize, Deserialize, strum::EnumIter)]
@@ -54,14 +53,15 @@ fn test_user_order_relations_derive() {
 }
 
 #[test]
-fn test_relation_statements() {
+fn test_relation_statements() -> anyhow::Result<()> {
     // Test OrderProductRelations statement
-    let order_product_stmt = OrderRelations::OrderToProduct.to_relate_statement();
+    let order_product_stmt = OrderRelations::OrderToProduct.to_statement()?.build().map_err(anyhow::Error::from)?;
     assert!(order_product_stmt.contains("RELATE orders:id->order_product->products:id CONTENT order_product_content"));
 
     // Test UserOrderRelations statement
-    let user_order_stmt = UserRelations::UserToOrder.to_relate_statement();
+    let user_order_stmt = UserRelations::UserToOrder.to_statement()?.build()?;
     assert!(user_order_stmt.contains("RELATE users:id->user_order->orders:id CONTENT user_order_content"));
+    Ok(())
 }
 
 impl OrderRelations {

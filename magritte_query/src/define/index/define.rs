@@ -81,11 +81,19 @@ impl DefineIndexStatement {
         } else if self.if_not_exists {
             stmt.push_str("IF NOT EXISTS ");
         }
-        stmt.push_str(&*self.name);
+        if let Some(name) = &self.name {
+            stmt.push_str(name.as_str());
+        } else {
+            bail!("Index name is required");
+        }
 
         stmt.push_str(" ON ");
 
-        stmt.push_str(&*self.table);
+        if let Some(table) = &self.table {
+            stmt.push_str(table.as_str());
+        } else {
+            bail!("Table name is required");
+        }
 
         if let Some(fields) = &self.fields {
             stmt.push_str(" FIELDS ");
@@ -101,8 +109,6 @@ impl DefineIndexStatement {
             } else if columns.len() > 1 {
                 stmt.push_str(columns.join(", ").as_str());
             }
-        } else {
-            bail!("No fields or columns provided")
         }
 
         stmt.push_str(self.specifics.to_string().as_str());

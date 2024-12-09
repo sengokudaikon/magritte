@@ -13,7 +13,7 @@ pub(crate) mod token;
 pub(crate) mod user;
 
 use crate::define::define_table::DefineTableStatement;
-use crate::{ColumnType, EdgeType, EventType, IndexType, RecordType};
+use crate::{ColumnType, EdgeType, EventType, IndexType, TableType};
 pub use access::*;
 pub use analyzer::*;
 pub use config::*;
@@ -70,7 +70,7 @@ impl Define  {
     pub fn param() -> DefineParamStatement {
         DefineParamStatement::default()
     }
-    pub fn table<T> () -> DefineTableStatement<T> where T: RecordType {
+    pub fn table<T> () -> DefineTableStatement<T> where T: TableType {
         DefineTableStatement::new()
     }
     pub fn token() -> DefineTokenStatement {

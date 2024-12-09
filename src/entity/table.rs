@@ -1,10 +1,9 @@
 use crate::entity::{HasColumns, HasEvents, HasIndexes, HasRelations};
-use crate::prelude::{ColumnTrait, EventTrait, IndexTrait, RelationTrait};
-use anyhow::{anyhow, bail};
-use magritte_query::define::define_table::{DefineTableStatement, TableTypes};
-use magritte_query::{Define, Permission, RecordRef, SchemaType, TableType};
+use crate::{ColumnTrait, EventTrait, IndexTrait, RelationTrait};
+use anyhow::anyhow;
+use magritte_query::define::define_table::DefineTableStatement;
+use magritte_query::{Define, Permission, SchemaType, TableType};
 use std::fmt::{Debug, Display};
-use std::str::FromStr;
 use std::time::Duration;
 
 /// An abstract base class for defining Entities.
@@ -20,7 +19,7 @@ use std::time::Duration;
 /// - Insert: `insert`, `insert_*`
 /// - Update: `update`, `update_*`
 /// - Delete: `delete`, `delete_*`
-pub trait TableTrait: TableType + HasColumns{
+pub trait TableTrait: TableType + HasColumns {
     fn def() -> TableDef;
     fn def_owned(&self) -> TableDef {
         Self::def()
@@ -31,42 +30,16 @@ pub trait TableTrait: TableType + HasColumns{
     }
 
     fn to_statement_owned(&self) -> DefineTableStatement<Self> {
-        Self::def_owned(&self).to_statement()
+        Self::def_owned(self).to_statement()
     }
 
-    fn columns(&self) -> impl IntoIterator<Item = impl ColumnTrait>
+    fn columns() -> impl IntoIterator<Item = impl ColumnTrait>
     where
         Self: Sized,
     {
         <Self as HasColumns>::columns()
     }
 }
-
-// Extension trait for tables with relations
-pub trait TableWithRelations: TableTrait + HasRelations {
-    fn relations(&self) -> impl IntoIterator<Item = impl RelationTrait> where Self: Sized {
-        <Self as HasRelations>::relations()
-    }
-}
-
-// Extension trait for tables with indexes
-pub trait TableWithIndexes: TableTrait + HasIndexes {
-    fn indexes(&self) -> impl IntoIterator<Item = impl IndexTrait> where Self: Sized {
-        <Self as HasIndexes>::indexes()
-    }
-}
-
-// Extension trait for tables with events
-pub trait TableWithEvents: TableTrait + HasEvents {
-    fn events(&self) -> impl IntoIterator<Item = impl EventTrait> where Self: Sized {
-        <Self as HasEvents>::events()
-    }
-}
-
-// Blanket implementations for any type that implements the required traits
-impl<T: TableTrait + HasRelations> TableWithRelations for T {}
-impl<T: TableTrait + HasIndexes> TableWithIndexes for T {}
-impl<T: TableTrait + HasEvents> TableWithEvents for T {}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TableDef {
@@ -82,6 +55,7 @@ pub struct TableDef {
 }
 
 impl TableDef {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: impl Into<String>,
         schema_type: impl Into<String>,
@@ -100,7 +74,7 @@ impl TableDef {
             if_not_exists,
             permissions: permissions
                 .as_ref()
-                .map(|pers| pers.iter().map(|p| Permission::from(p)).collect()),
+                .map(|pers| pers.iter().map(Permission::from).collect()),
             drop,
             as_select,
             changefeed: changefeed.map(|c| (Duration::from_mins(c.0), c.1)),
@@ -130,7 +104,7 @@ impl TableDef {
     }
 
     pub fn as_select(&self) -> Option<&str> {
-        self.as_select.as_ref().map(|s| s.as_str())
+        self.as_select.as_deref()
     }
 
     pub fn changefeed(&self) -> Option<(Duration, bool)> {
@@ -138,7 +112,7 @@ impl TableDef {
     }
 
     pub fn comment(&self) -> Option<&str> {
-        self.comment.as_ref().map(|s| s.as_str())
+        self.comment.as_deref()
     }
 
     pub fn to_statement<T: TableTrait>(&self) -> DefineTableStatement<T> {
@@ -180,8 +154,9 @@ where
         TableDef::new(
             value
                 .get_name()
-                .ok_or_else(|| anyhow!("Table name is required")).unwrap(),
-            value.get_table_type().unwrap().to_string(),
+                .ok_or_else(|| anyhow!("Table name is required"))
+                .unwrap(),
+            value.get_schema_type().unwrap().to_string(),
             value.get_overwrite(),
             value.get_if_not_exists(),
             value
@@ -189,7 +164,7 @@ where
                 .map(|p| p.iter().map(|p| p.to_string()).collect()),
             value.get_drop(),
             value.get_as_select().map(|f| f.to_string()),
-            value.get_changefeed().map(|(d, t)| (d.as_secs() as u64, t)),
+            value.get_changefeed().map(|(d, t)| (d.as_secs(), t)),
             value.get_comment(),
         )
     }
