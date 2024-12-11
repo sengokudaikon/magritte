@@ -1,0 +1,114 @@
+# GitHub Actions with Conditional Job Running Based on Commit Message
+# 
+# --------------------------------------------------------------------------------
+# 
+# Following jobs will always run
+# 
+#   - `clippy`
+#   - `test`
+
+name: tests
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+  push:
+    paths-ignore:
+      - '**.md'
+      - '.github/ISSUE_TEMPLATE/**'
+    branches:
+      - master
+      - 1.*.x
+      - 0.*.x
+      - pr/**/ci
+      - ci-*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  init:
+    name: Init
+    runs-on: ubuntu-latest
+    outputs:
+      run-issues: ${{ contains(steps.git-log.outputs.message, '[issues]') }}
+      run-partial: >-
+        ${{
+          contains(steps.git-log.outputs.message, '[issues]')
+        }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: git-log
+        run: echo "message=$(git log --no-merges -1 --oneline)" >> $GITHUB_OUTPUT
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: clippy
+      - run: cargo clippy --all -- -D warnings
+      - run: cargo clippy --all --features runtime-async-std-native-tls,sqlx-all -- -D warnings
+      # Disable clippy checks on `sea-orm-cli` until we upgraded `clap` to v4. https://github.com/clap-rs/clap/issues/4849
+      # - run: cargo clippy --manifest-path sea-orm-cli/Cargo.toml -- -D warnings
+      - run: cargo clippy --manifest-path sea-orm-migration/Cargo.toml -- -D warnings
+
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  test:
+    name: Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --workspace
+
+  issues-matrix:
+    name: Issues Matrix
+    needs: init
+    if: ${{ (needs.init.outputs.run-partial == 'true' && needs.init.outputs.run-issues == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: set-matrix
+        run: echo "path_matrix=$(find issues -type f -name 'Cargo.toml' -printf '%P\0' | jq -Rc '[  split("\u0000") | .[] | "issues/\(.)" ]')" >> $GITHUB_OUTPUT
+    outputs:
+      path_matrix: ${{ steps.set-matrix.outputs.path_matrix }}
+
+  issues:
+    name: Issues
+    needs:
+      - init
+      - issues-matrix
+    if: ${{ (needs.init.outputs.run-partial == 'true' && needs.init.outputs.run-issues == 'true') }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        path: ${{ fromJson(needs.issues-matrix.outputs.path_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --manifest-path ${{ matrix.path }}
+      - run: cargo test --manifest-path ${{ matrix.path }}

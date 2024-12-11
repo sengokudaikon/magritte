@@ -16,6 +16,9 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let crate_name = get_crate_name(false);
     // Use shared table name resolution
     let table_name = resolve_table_name(&table_attr, ident);
+    if table_name == "Dummy" {
+        return Ok(quote!());
+    }
     let table_name_lit = quote!(#table_name);
     let table_name_str = &*table_name;
     let schema_type = table_attr.schema.unwrap_or("SCHEMAFULL".to_string());
