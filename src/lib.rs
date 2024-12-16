@@ -13,6 +13,7 @@ mod defs;
 pub mod entity;
 pub mod entity_crud;
 mod snapshot;
+mod database;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

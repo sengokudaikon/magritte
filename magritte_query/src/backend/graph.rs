@@ -6,7 +6,7 @@ use super::conditions::Operator;
 use super::types::Projection;
 use crate::backend::value::SqlValue;
 use crate::expr::HasProjections;
-use crate::SelectStatement;
+use crate::{RelationType, SelectStatement};
 use crate::types::TableType;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -169,8 +169,7 @@ impl Display for Relation {
 /// Trait for graph traversal operations
 pub trait GraphTraversal {
     /// Add a graph traversal step
-    fn traverse(self, rel_type: RelationDirection, edge: &str, target: &str) -> Self;
-
+    fn relate(self, rel_type: RelationDirection, edge: &str, target: &str) -> Self;
     /// Add recursive traversal
     fn recursive(self, depth: RecursiveDepth) -> Self;
     fn with_alias(self, alias: &str) -> Self;
@@ -189,11 +188,12 @@ pub trait GraphTraversal {
 }
 
 impl<T: HasProjections> GraphTraversal for T {
-    fn traverse(mut self, rel_type: RelationDirection, edge: &str, target: &str) -> Self {
+    fn relate(mut self, rel_type: RelationDirection, edge: &str, target: &str) -> Self {
         self.projections_mut()
             .push(Projection::Relation(Relation::new(rel_type, edge, target)));
         self
     }
+
 
     fn recursive(mut self, depth: RecursiveDepth) -> Self {
         if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {

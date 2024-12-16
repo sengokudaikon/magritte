@@ -1,4 +1,4 @@
-use magritte::prelude::*;
+use magritte::*;
 use serde::{Deserialize, Serialize};
 use pretty_assertions::assert_eq;
 use super::Product;

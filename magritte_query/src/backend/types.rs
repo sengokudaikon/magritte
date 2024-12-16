@@ -102,9 +102,9 @@ pub trait IndexType:
 }
 
 pub trait RelationType: Clone + Send + Sync + Copy + strum::IntoEnumIterator + 'static {
-    fn relation_via(&self) -> &str;
-    fn relation_from(&self) -> String;
-    fn relation_to(&self) -> String;
+    fn relation_via() -> &'static str;
+    fn relation_from() -> String;
+    fn relation_to() -> String;
 }
 
 pub trait ColumnTypeLite:

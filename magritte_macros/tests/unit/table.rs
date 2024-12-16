@@ -1,7 +1,7 @@
 #[cfg(test)]
-use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
 use pretty_assertions::assert_eq;
+use magritte::*;
 use crate::{Posts, Product, ProductColumns, User};
 
 // Test table with as_select
@@ -46,7 +46,7 @@ fn test_table_derives() {
     // Full table
     let post = Posts::new("1");
     assert_eq!(Posts::table_name(), "posts");
-    let def = post.def();
+    let def = post.def_owned();
     assert!(def.is_overwrite());
     assert_eq!(def.if_not_exists(), false);
     assert_eq!(def.is_drop(), false);
@@ -56,7 +56,7 @@ fn test_table_derives() {
 
     // Table with as_select
     let active_users = ActiveUsers { id: "1".into(), name: "John".to_string() };
-    let def = active_users.def();
+    let def = active_users.def_owned();
     assert_eq!(
         def.as_select(),
         Some("* FROM users WHERE active == true")

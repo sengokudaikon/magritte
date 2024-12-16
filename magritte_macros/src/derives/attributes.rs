@@ -115,6 +115,121 @@ impl ToTokens for Table {
 }
 
 #[derive(Default, ExtractAttributes)]
+#[deluxe(attributes(edge))]
+pub struct Edge {
+    #[deluxe(default)]
+    pub name: Option<String>,
+    #[deluxe(default)]
+    pub from: Option<Path>,
+    #[deluxe(default)]
+    pub to: Option<Path>,
+    #[deluxe(default)]
+    pub enforced: bool,
+    #[deluxe(default)]
+    pub schema: Option<String>,
+    #[deluxe(default)]
+    pub permissions: Option<ExprArray>,
+    #[deluxe(default)]
+    pub overwrite: bool,
+    #[deluxe(default)]
+    pub if_not_exists: bool,
+    #[deluxe(default)]
+    pub drop: bool,
+    #[deluxe(default)]
+    pub changefeed: Option<String>,
+    #[deluxe(default)]
+    pub include_original: bool,
+    #[deluxe(default)]
+    pub comment: Option<String>,
+    #[deluxe(default)]
+    pub as_select: Option<AsSelect>,
+}
+
+impl ToTokens for Edge {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Edge {
+            name,
+            from,
+            to,
+            enforced,
+            schema,
+            permissions,
+            overwrite,
+            if_not_exists,
+            drop,
+            changefeed,
+            include_original,
+            comment,
+            as_select,
+        } = self;
+
+        let expanded = quote! {
+            Edge {
+                name: #name,
+                from: #from,
+                to: #to,
+                enforced: #enforced,
+                schema: #schema,
+                permissions: #permissions,
+                overwrite: #overwrite,
+                if_not_exists: #if_not_exists,
+                drop: #drop,
+                comment: #comment,
+                changefeed: #changefeed,
+                include_original: #include_original,
+                as_select: #as_select
+            }
+        };
+        tokens.extend(expanded);
+    }
+}
+
+#[derive(Default, ExtractAttributes)]
+#[deluxe(attributes(relate))]
+pub struct Relate {
+    #[deluxe(default)]
+    pub from: Option<Path>,
+    #[deluxe(default, rename = in)]
+    pub in_id: Option<String>,
+    #[deluxe(default)]
+    pub to: Option<Path>,
+    #[deluxe(default, rename = out)]
+    pub out_id: Option<String>,
+    #[deluxe(default)]
+    pub edge: Option<Path>,
+    #[deluxe(default)]
+    pub content: Option<Expr>,
+    #[deluxe(default)]
+    pub eager: bool
+}
+
+impl ToTokens for Relate {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Relate {
+            from,
+            in_id,
+            to,
+            out_id,
+            edge,
+            content,
+            eager,
+        } = self;
+        let expanded = quote! {
+            Relate {
+                from: #from
+                in_id: #in_id,
+                to: #to,
+                out_id: #out_id,
+                edge: #edge,
+                content: #content,
+                eager: #eager
+            }
+        };
+        tokens.extend(expanded);
+    }
+}
+
+#[derive(Default, ExtractAttributes)]
 #[deluxe(attributes(column))]
 pub struct Column {
     #[deluxe(default)]
@@ -488,117 +603,6 @@ impl ToTokens for Index {
                 hnsw: #hnsw,
                 concurrently: #concurrently,
                 comment: #comment,
-            }
-        };
-        tokens.extend(expanded);
-    }
-}
-
-#[derive(Default, ExtractAttributes)]
-#[deluxe(attributes(edge))]
-pub struct Edge {
-    #[deluxe(default)]
-    pub name: Option<String>,
-    #[deluxe(default)]
-    pub from: Option<Path>,
-    #[deluxe(default)]
-    pub to: Option<Path>,
-    #[deluxe(default)]
-    pub enforced: bool,
-    #[deluxe(default)]
-    pub schema: Option<String>,
-    #[deluxe(default)]
-    pub permissions: Option<ExprArray>,
-    #[deluxe(default)]
-    pub overwrite: bool,
-    #[deluxe(default)]
-    pub if_not_exists: bool,
-    #[deluxe(default)]
-    pub drop: bool,
-    #[deluxe(default)]
-    pub changefeed: Option<String>,
-    #[deluxe(default)]
-    pub include_original: bool,
-    #[deluxe(default)]
-    pub comment: Option<String>,
-    #[deluxe(default)]
-    pub as_select: Option<AsSelect>,
-}
-
-impl ToTokens for Edge {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Edge {
-            name,
-            from,
-            to,
-            enforced,
-            schema,
-            permissions,
-            overwrite,
-            if_not_exists,
-            drop,
-            changefeed,
-            include_original,
-            comment,
-            as_select,
-        } = self;
-
-        let expanded = quote! {
-            Edge {
-                name: #name,
-                from: #from,
-                to: #to,
-                enforced: #enforced,
-                schema: #schema,
-                permissions: #permissions,
-                overwrite: #overwrite,
-                if_not_exists: #if_not_exists,
-                drop: #drop,
-                comment: #comment,
-                changefeed: #changefeed,
-                include_original: #include_original,
-                as_select: #as_select
-            }
-        };
-        tokens.extend(expanded);
-    }
-}
-
-#[derive(Default, ExtractAttributes)]
-#[deluxe(attributes(relate))]
-pub struct Relate {
-    #[deluxe(default)]
-    pub from: Option<Path>,
-    #[deluxe(default, rename = in)]
-    pub in_id: Option<String>,
-    #[deluxe(default)]
-    pub to: Option<Path>,
-    #[deluxe(default, rename = out)]
-    pub out_id: Option<String>,
-    #[deluxe(default)]
-    pub edge: Option<Path>,
-    #[deluxe(default)]
-    pub content: Option<Expr>,
-}
-
-impl ToTokens for Relate {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Relate {
-            from,
-            in_id,
-            to,
-            out_id,
-            edge,
-            content,
-        } = self;
-        let expanded = quote! {
-            Relate {
-                from: #from
-                in_id: #in_id,
-                to: #to,
-                out_id: #out_id,
-                edge: #edge,
-                content: #content,
             }
         };
         tokens.extend(expanded);

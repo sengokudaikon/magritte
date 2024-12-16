@@ -1,8 +1,7 @@
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use pretty_assertions::assert_eq;
-use magritte::RelationTrait;
-use magritte_macros::Relation;
+use magritte::*;
 
 // Test relations for Order and Product
 #[derive(Relation, Serialize, Deserialize, strum::EnumIter)]
@@ -25,7 +24,8 @@ pub enum UserRelations {
         to = Order,
         out = "id",
         edge = UserOrder,
-        content = "user_order_content"
+        content = "user_order_content",
+        eager
     )]
     UserToOrder,
 }
@@ -33,8 +33,7 @@ pub enum UserRelations {
 #[test]
 fn test_order_product_relations_derive() {
     // Test OrderProductRelations enum
-    let relation = OrderRelations::OrderToProduct;
-    let relation_def = relation.def();
+    let relation_def = OrderRelations::OrderToProduct.as_relation().def_owned();
     assert_eq!(relation_def.relation_from(), "orders:id");
     assert_eq!(relation_def.relation_to(), "products:id");
     assert_eq!(relation_def.relation_name(), "order_product");
@@ -45,7 +44,7 @@ fn test_order_product_relations_derive() {
 fn test_user_order_relations_derive() {
     // Test UserOrderRelations enum
     let relation = UserRelations::UserToOrder;
-    let relation_def = relation.def();
+    let relation_def = relation.as_relation().def_owned();
     assert_eq!(relation_def.relation_from(), "users:id");
     assert_eq!(relation_def.relation_to(), "orders:id");
     assert_eq!(relation_def.relation_name(), "user_order");
@@ -55,11 +54,11 @@ fn test_user_order_relations_derive() {
 #[test]
 fn test_relation_statements() -> anyhow::Result<()> {
     // Test OrderProductRelations statement
-    let order_product_stmt = OrderRelations::OrderToProduct.to_statement()?.build().map_err(anyhow::Error::from)?;
+    let order_product_stmt = OrderRelations::OrderToProduct.as_relation().to_statement()?.build().map_err(anyhow::Error::from)?;
     assert!(order_product_stmt.contains("RELATE orders:id->order_product->products:id CONTENT order_product_content"));
 
     // Test UserOrderRelations statement
-    let user_order_stmt = UserRelations::UserToOrder.to_statement()?.build()?;
+    let user_order_stmt = UserRelations::UserToOrder.as_relation().to_statement()?.build()?;
     assert!(user_order_stmt.contains("RELATE users:id->user_order->orders:id CONTENT user_order_content"));
     Ok(())
 }

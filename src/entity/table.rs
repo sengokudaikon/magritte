@@ -2,7 +2,7 @@ use crate::entity::{HasColumns, HasEvents, HasIndexes, HasRelations};
 use crate::{ColumnTrait, EventTrait, IndexTrait, RelationTrait};
 use anyhow::anyhow;
 use magritte_query::define::define_table::DefineTableStatement;
-use magritte_query::{Define, Permission, SchemaType, TableType};
+use magritte_query::{Define, Permission, RecordRef, SchemaType, TableType};
 use std::fmt::{Debug, Display};
 use std::time::Duration;
 
@@ -38,6 +38,10 @@ pub trait TableTrait: TableType + HasColumns {
         Self: Sized,
     {
         <Self as HasColumns>::columns()
+    }
+
+    fn as_record(&self) -> RecordRef<Self> {
+        RecordRef::new()
     }
 }
 

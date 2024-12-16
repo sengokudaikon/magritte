@@ -1,6 +1,6 @@
-use magritte::prelude::*;
 use serde::{Deserialize, Serialize};
 use pretty_assertions::assert_eq;
+use magritte::*;
 use super::User;
 use super::Order;
 use super::Product;
@@ -51,7 +51,7 @@ fn test_order_product_edge_derive() {
         quantity: "1".to_string(),
     };
 
-    let edge_def = edge.def();
+    let edge_def = edge.def_owned();
     assert_eq!(edge_def.edge_name(), "order_product");
     assert_eq!(edge_def.schema_type().to_string(), "SCHEMALESS");
     assert_eq!(edge_def.permissions().len(), 0);
@@ -72,7 +72,7 @@ fn test_user_order_edge_derive() {
         note: "Special order".to_string(),
     };
 
-    let edge_def = edge.def();
+    let edge_def = edge.def_owned();
     assert_eq!(edge_def.edge_name(), "user_order");
     assert_eq!(edge_def.schema_type().to_string(), "SCHEMAFULL");
     assert_eq!(edge_def.permissions().len(), 0);
@@ -85,14 +85,15 @@ fn test_user_order_edge_derive() {
 }
 
 #[test]
-fn test_edge_statements() {
+fn test_edge_statements() -> Result<()> {
     // Test OrderProductEdge statement
-    let order_product_edge_stmt = OrderProduct::new().to_statement();
+    let order_product_edge_stmt = OrderProduct::new().to_statement_owned().build()?;
     assert!(order_product_edge_stmt.contains("DEFINE TABLE order_product SCHEMALESS TYPE RELATION FROM orders TO products ENFORCED"));
 
     // Test UserOrderEdge statement
-    let user_order_edge_stmt = UserOrder::new().to_statement();
+    let user_order_edge_stmt = UserOrder::new().to_statement_owned().build()?;
     assert!(user_order_edge_stmt.contains("DEFINE TABLE IF NOT EXISTS user_order SCHEMAFULL TYPE RELATION FROM users TO orders"));
+    Ok(())
 }
 
 #[test]

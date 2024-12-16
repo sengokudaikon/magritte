@@ -1,4 +1,5 @@
-use anyhow::{anyhow, Result};
+use crate::RelationTrait;
+use anyhow::Result;
 use magritte_query::{
     DeleteStatement, HasId, InsertStatement, Query, RecordType, SelectStatement, SurrealId,
     UpdateStatement, UpsertStatement,
@@ -9,32 +10,32 @@ where
     T: RecordType + HasId,
 {
     fn insert(self) -> anyhow::Result<InsertStatement<T>>;
-    fn insert_by_id<I: Into<SurrealId<T>>>(self, id: I) -> anyhow::Result<InsertStatement<T>>;
-    fn get(self) -> anyhow::Result<SelectStatement<T>>;
-    fn upsert(self) -> anyhow::Result<UpsertStatement<T>>;
-    fn update(self) -> anyhow::Result<UpdateStatement<T>>;
-
-    /// Finds a record by id.
-    fn find_by_id<I: Into<SurrealId<T>>>(id: I) -> anyhow::Result<SelectStatement<T>>;
-    /// Find all records.
+    fn insert_by_id(id: SurrealId<T>, entity: T) -> Result<InsertStatement<T>>;
+    fn find(self) -> anyhow::Result<SelectStatement<T>>;
+    fn find_by_id(id: SurrealId<T>) -> Result<SelectStatement<T>>;
     fn find_all() -> anyhow::Result<SelectStatement<T>>;
-
-    /// Count filtered records.
     fn count() -> anyhow::Result<SelectStatement<T>>;
-
-    /// Delete the current record by instance.
+    fn upsert(self) -> anyhow::Result<UpsertStatement<T>>;
+    fn upsert_by_id(id: SurrealId<T>, entity: T) -> Result<UpsertStatement<T>>;
+    fn update(self) -> anyhow::Result<UpdateStatement<T>>;
+    fn update_by_id(id: SurrealId<T>, entity: T) -> Result<UpdateStatement<T>>;
     fn delete(&self) -> anyhow::Result<DeleteStatement<T>>;
+    fn delete_by_id(id: SurrealId<T>) -> Result<DeleteStatement<T>>;
     fn delete_all() -> anyhow::Result<DeleteStatement<T>>;
-    /// Deletes a record by id.
-    fn delete_by_id<I: Into<SurrealId<T>>>(id: I) -> anyhow::Result<DeleteStatement<T>>;
-    /// Fetches all edges connected to the record.
-    fn fetch_all_edges(&self) -> SelectStatement<T>;
 
-    /// Fetches edges along with related records.
-    fn fetch_edges_with_related(&self) -> SelectStatement<T>;
-
-    /// Fetches all relations (edges and related records) for the record.
-    fn fetch_all_relations(&self) -> SelectStatement<T>;
+    /// Fetch the source `T` along with a single relation `R` that has `R::Source = T`.
+    /// Returns `(T, Vec<R::Target>)` as the typed result.
+    fn with_related<R>(relation: R) -> SelectStatement<(T, Vec<R::Target>)>
+    where
+        R: RelationTrait<Source = T>,
+        R::Target: RecordType + HasId,
+    {
+        let def = relation.def_owned();
+        Query::select()
+            .field("*", None)
+            .field(def.relation_to(), Some(def.relation_name()))
+            .fetch(&[def.relation_name()])
+    }
 }
 
 impl<T> SurrealCrud<T> for T
@@ -44,30 +45,20 @@ where
     fn insert(self) -> Result<InsertStatement<T>> {
         Query::insert().content(self).map_err(anyhow::Error::from)
     }
-    fn insert_by_id<I: Into<SurrealId<T>>>(self, id: I) -> Result<InsertStatement<T>> {
-        Query::insert().where_id(id.into()).content(self).map_err(anyhow::Error::from)
-    }
 
-    fn get(self) -> Result<SelectStatement<T>> {
-        Ok(Query::select().where_id(self.id()))
-    }
-
-    fn upsert(self) -> anyhow::Result<UpsertStatement<T>> {
-        Query::upsert()
-            .where_id(self.id())
-            .content(self)
+    fn insert_by_id(id: SurrealId<T>, entity: T) -> Result<InsertStatement<T>> {
+        Query::insert()
+            .where_id(id)
+            .content(entity)
             .map_err(anyhow::Error::from)
     }
 
-    fn update(self) -> anyhow::Result<UpdateStatement<T>> {
-        Query::update()
-            .where_id(self.id())
-            .content(self)
-            .map_err(anyhow::Error::from)
+    fn find(self) -> Result<SelectStatement<T>> {
+        Ok(Query::select().only())
     }
 
-    fn find_by_id<I: Into<SurrealId<T>>>(id: I) -> anyhow::Result<SelectStatement<T>> {
-        Ok(Query::select().where_id(id.into()))
+    fn find_by_id(id: SurrealId<T>) -> Result<SelectStatement<T>> {
+        Ok(Query::select().where_id(id))
     }
 
     fn find_all() -> anyhow::Result<SelectStatement<T>> {
@@ -78,40 +69,37 @@ where
         Ok(Query::select().count())
     }
 
+    fn upsert(self) -> anyhow::Result<UpsertStatement<T>> {
+        Query::upsert().content(self).map_err(anyhow::Error::from)
+    }
+
+    fn upsert_by_id(id: SurrealId<T>, entity: T) -> Result<UpsertStatement<T>> {
+        Query::upsert()
+            .where_id(id)
+            .content(entity)
+            .map_err(anyhow::Error::from)
+    }
+
+    fn update(self) -> anyhow::Result<UpdateStatement<T>> {
+        Query::update().content(self).map_err(anyhow::Error::from)
+    }
+
+    fn update_by_id(id: SurrealId<T>, entity: T) -> Result<UpdateStatement<T>> {
+        Query::update()
+            .where_id(id)
+            .content(entity)
+            .map_err(anyhow::Error::from)
+    }
+
     fn delete(&self) -> anyhow::Result<DeleteStatement<T>> {
-        Ok(Query::delete().where_id(self.id()))
+        Ok(Query::delete())
+    }
+
+    fn delete_by_id(id: SurrealId<T>) -> Result<DeleteStatement<T>> {
+        Ok(Query::delete().where_id(id))
     }
 
     fn delete_all() -> anyhow::Result<DeleteStatement<T>> {
         Ok(Query::delete())
-    }
-
-    fn delete_by_id<I: Into<SurrealId<T>>>(id: I) -> anyhow::Result<DeleteStatement<T>> {
-        Ok(Query::delete().where_id(id.into()))
-    }
-    fn fetch_all_edges(&self) -> SelectStatement<T> {
-        Query::select()
-            .field("*", None)
-            .field("->?", Some("edges")) // Fetch all outgoing edges
-            .fetch(&["edges"])
-            .where_id(self.id())
-    }
-
-    fn fetch_edges_with_related(&self) -> SelectStatement<T> {
-        Query::select()
-            .field("*", None)
-            .relation_wildcard_as("related") // Fetch all outgoing edges
-            .fetch(&["related"])
-            .where_id(self.id())
-    }
-
-    fn fetch_all_relations(&self) -> SelectStatement<T> {
-        Query::select()
-            .field("*", None)
-            .relation_wildcard_as("outbound")
-            .relation_inverse_wildcard_as("inbound")
-            .relation_bidirectional_wildcard_as("relations")
-            .fetch(&["relations", "inbound", "outbound"])
-            .where_id(self.id())
     }
 }

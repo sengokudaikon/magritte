@@ -1,7 +1,8 @@
 #![feature(slice_take)]
 
+use magritte_macros::Table;
+use magritte_query::{HasId, RecordRef, SurrealId};
 use serde::{Deserialize, Serialize};
-use magritte::prelude::*;
 
 mod table;
 
@@ -35,7 +36,15 @@ impl HasId for Order {
     }
 }
 impl Order {
-    pub fn new(id: impl Into<SurrealId<Self>>, created_at: impl Into<String>, user: impl Into<RecordRef<User>>, items: impl Into<Vec<RecordRef<Product>>>, total: impl Into<f64>, shipping_info: impl Into<serde_json::Value>, status: impl Into<String>) -> Self {
+    pub fn new(
+        id: impl Into<SurrealId<Self>>,
+        created_at: impl Into<String>,
+        user: impl Into<RecordRef<User>>,
+        items: impl Into<Vec<RecordRef<Product>>>,
+        total: impl Into<f64>,
+        shipping_info: impl Into<serde_json::Value>,
+        status: impl Into<String>,
+    ) -> Self {
         Self {
             id: id.into(),
             created_at: created_at.into(),
@@ -48,7 +57,7 @@ impl Order {
     }
 }
 
-#[derive(Table, Serialize, Deserialize,  Clone)]
+#[derive(Table, Serialize, Deserialize, Clone)]
 #[table(name = "products", schema = "SCHEMALESS")]
 pub struct Product {
     id: SurrealId<Self>,
@@ -88,9 +97,23 @@ impl HasId for Product {
     }
 }
 
-impl Product{
-    pub fn new(id: impl Into<SurrealId<Self>>, name: impl Into<String>, quantity: impl Into<i32>, price: impl Into<f64>, sku: impl Into<String>, metadata: impl Into<serde_json::Value>) -> Self {
-        Self { id: id.into(), name: name.into(), quantity: quantity.into(), price: price.into(), sku: sku.into(), metadata: metadata.into() }
+impl Product {
+    pub fn new(
+        id: impl Into<SurrealId<Self>>,
+        name: impl Into<String>,
+        quantity: impl Into<i32>,
+        price: impl Into<f64>,
+        sku: impl Into<String>,
+        metadata: impl Into<serde_json::Value>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            quantity: quantity.into(),
+            price: price.into(),
+            sku: sku.into(),
+            metadata: metadata.into(),
+        }
     }
 }
 
@@ -114,11 +137,18 @@ impl HasId for User {
 }
 
 impl User {
-    pub fn new(id: impl Into<SurrealId<Self>>, name: impl Into<String>, email: impl Into<String>) -> Self {
-        Self { id: id.into(), name: name.into(), email: email.into() }
+    pub fn new(
+        id: impl Into<SurrealId<Self>>,
+        name: impl Into<String>,
+        email: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            email: email.into(),
+        }
     }
 }
-
 
 // Test table with all possible attributes
 #[derive(Table, Serialize, Deserialize, Clone)]
@@ -144,6 +174,9 @@ impl HasId for Posts {
 
 impl Posts {
     pub fn new(id: impl Into<SurrealId<Self>>, content: impl Into<serde_json::Value>) -> Self {
-        Self { id: id.into(), content: content.into() }
+        Self {
+            id: id.into(),
+            content: content.into(),
+        }
     }
 }

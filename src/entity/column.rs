@@ -1,6 +1,7 @@
 use magritte_query::types::{ColumnType, NamedType, Permission};
 use magritte_query::{Define, DefineFieldStatement};
 use std::fmt::Display;
+use crate::TableTrait;
 
 /// Defines a Column for an Entity
 #[derive(Debug, Clone, PartialEq)]
@@ -79,6 +80,19 @@ impl ColumnDef {
 
     pub fn is_nullable(&self) -> bool {
         self.null
+    }
+
+    pub fn is_record(&self) -> bool {
+        self.col_type.contains("record")
+    }
+
+    pub fn as_record<T: TableTrait>(&self) -> Option<T> {
+        if self.is_record() {
+            let temp = self.value.clone()?;
+            serde_json::from_str(&temp).ok()
+        } else {
+            None
+        }
     }
 
     pub fn is_readonly(&self) -> bool {

@@ -1,7 +1,7 @@
 use crate::{Order, OrderColumns, User};
-use magritte::prelude::*;
 use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
+use magritte::*;
 
 // Test table events
 #[derive(Event, Serialize, Deserialize, strum::EnumIter)]
@@ -104,7 +104,7 @@ fn test_table_with_events() {
     );
 
     // Test event triggers
-    let events = Order::events().collect::<Vec<_>>();
+    let events = Order::events();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].event_name(), "created");
 }
