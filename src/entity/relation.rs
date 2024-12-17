@@ -34,8 +34,7 @@ pub trait RelationTrait: RelationType {
         Self::def()
     }
 
-    /// Create a relate statement for this relation
-    fn relate_ids(from_id: &str, to_id: &str) -> Result<RelateStatement> {
+    fn relate(from_id: &str, to_id: &str) -> Result<RelateStatement> {
         let def = Self::def();
         let from_record = format!("{}:{}", def.relation_from(), from_id);
         let to_record = format!("{}:{}", def.relation_to(), to_id);
@@ -72,6 +71,22 @@ impl RelationDef {
             content: content.into(),
             load_strategy,
         }
+    }
+
+    /// Create a relate statement for this relation
+    pub fn relate(&self, from_id: &str, to_id: &str) -> Result<RelateStatement> {
+        let from_record = format!("{}:{}", self.relation_from(), from_id);
+        let to_record = format!("{}:{}", self.relation_to(), to_id);
+
+        let mut stmt = Query::relate()
+            .from_record(&from_record)
+            .to_record(&to_record)
+            .edge_table(&self.via);
+
+        if let Some(content) = self.content() {
+            stmt = stmt.content(content).map_err(anyhow::Error::from)?;
+        }
+        Ok(stmt)
     }
 
     pub fn relation_name(&self) -> &str {

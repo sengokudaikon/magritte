@@ -51,7 +51,7 @@ where
 impl<T> BasicCrud<T> for T where T: HasId + RecordType + Sized {}
 pub trait SurrealCrud<T>
 where
-    T: HasId + RecordType,
+    T: HasId + RecordType + Sized,
 {
     fn insert(&self) -> anyhow::Result<InsertStatement<T>>;
     fn find(&self) -> anyhow::Result<SelectStatement<T>>;

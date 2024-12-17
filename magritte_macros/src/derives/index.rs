@@ -118,6 +118,11 @@ pub fn expand_derive_index(input: DeriveInput) -> syn::Result<TokenStream> {
                 use strum::IntoEnumIterator;
                 #ident::iter().collect::<Vec<_>>()
             }
+
+            fn index_defs() -> Vec<#crate_name::IndexDef> {
+                use strum::IntoEnumIterator;
+                #ident::iter().map(|i| i.def()).collect()
+            }
         }
 
         #[automatically_derived]

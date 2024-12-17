@@ -162,6 +162,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
 
             fn column_defs() -> Vec<#crate_name::ColumnDef> {
                 use strum::IntoEnumIterator;
+                use #crate_name::ColumnTrait;
                 #column_enum_name::iter().map(|r| r.def()).collect()
             }
         }

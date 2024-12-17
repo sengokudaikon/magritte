@@ -1,7 +1,9 @@
 pub(crate) mod cache;
-pub(crate) mod macros;
 pub(crate) mod registry;
-
+pub(crate) mod unsafe_em;
+pub mod macros;
+pub use macros::EntityFlusherRegistration;
+pub use macros::EntityStateFlusher;
 use crate::entity::manager::cache::EntityCache;
 use crate::entity::manager::unsafe_em::TypeErasedState;
 use crate::{
@@ -9,7 +11,6 @@ use crate::{
     TableTrait,
 };
 use anyhow::{anyhow, Result};
-pub use macros::*;
 use magritte_query::{HasId as _, Query, SurrealDB, SurrealId};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -308,10 +309,12 @@ impl EntityManager {
     pub async fn flush(&self) -> Result<()> {
         let mut uow = self.unit_of_work.write().await;
 
-        // The actual flushing is now handled by the generated code from impl_entity_flush!
-        // which will try each registered entity type
+        // Iterate through states and use the registered flushers
         for state in uow.states.values_mut() {
-            self.flush_entity_state(state).await?;
+            // Safety: We verify the type through registry before flushing
+            unsafe {
+                state.flush_with_db(self.db.clone())?;
+            }
         }
 
         Ok(())
@@ -356,64 +359,4 @@ impl EntityManager {
             }
         }
     }
-}
-
-pub mod unsafe_em {
-    use crate::entity::manager::EntityState;
-    use crate::TableTrait;
-    use std::any::TypeId;
-
-    /// Raw pointer wrapper for type-erased but safe access
-    pub struct TypeErasedState {
-        ptr: *mut (),
-        drop: unsafe fn(*mut ()),
-        type_id: TypeId,
-    }
-
-    impl TypeErasedState {
-        pub fn new<T: TableTrait>(state: EntityState<T>) -> Self {
-            unsafe fn drop_impl<TT: TableTrait>(ptr: *mut ()) {
-                drop(Box::from_raw(ptr as *mut EntityState<TT>));
-            }
-
-            let boxed = Box::new(state);
-            Self {
-                ptr: Box::into_raw(boxed) as *mut (),
-                drop: drop_impl::<T>,
-                type_id: TypeId::of::<T>(),
-            }
-        }
-
-        /// # Safety
-        ///
-        /// The caller must ensure the type is correct
-        pub unsafe fn as_ref<T: TableTrait>(&self) -> Option<&EntityState<T>> {
-            if TypeId::of::<T>() == self.type_id {
-                Some(&*(self.ptr as *const EntityState<T>))
-            } else {
-                None
-            }
-        }
-
-        /// # Safety
-        ///
-        /// The caller must ensure the type is correct
-        pub unsafe fn as_mut<T: TableTrait>(&mut self) -> Option<&mut EntityState<T>> {
-            if TypeId::of::<T>() == self.type_id {
-                Some(&mut *(self.ptr as *mut EntityState<T>))
-            } else {
-                None
-            }
-        }
-    }
-
-    impl Drop for TypeErasedState {
-        fn drop(&mut self) {
-            unsafe { (self.drop)(self.ptr) }
-        }
-    }
-
-    // Safety: The TypeErasedState ensures proper type checking and memory management
-    unsafe impl Send for TypeErasedState {}
-    unsafe impl Sync for TypeErasedState {}
 }

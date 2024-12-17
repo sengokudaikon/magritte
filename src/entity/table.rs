@@ -2,7 +2,7 @@ use crate::entity::{HasColumns, HasEvents, HasIndexes, HasRelations};
 use crate::{ColumnTrait, EventTrait, IndexTrait, RelationTrait};
 use anyhow::anyhow;
 use magritte_query::define::define_table::DefineTableStatement;
-use magritte_query::{Define, Permission, RecordRef, SchemaType, TableType};
+use magritte_query::{Define, Permission, RecordRef, Relations, SchemaType, TableType};
 use std::fmt::{Debug, Display};
 use std::time::Duration;
 
@@ -33,11 +33,32 @@ pub trait TableTrait: TableType + HasColumns {
         Self::def_owned(self).to_statement()
     }
 
-    fn columns() -> impl IntoIterator<Item = impl ColumnTrait>
+    fn columns() -> Vec<impl ColumnTrait>
     where
         Self: Sized,
     {
         <Self as HasColumns>::columns()
+    }
+
+    fn indexes() -> Vec<impl IndexTrait>
+    where
+        Self: Sized, Self:HasIndexes
+    {
+        <Self as HasIndexes>::indexes()
+    }
+
+    fn events() -> Vec<impl EventTrait>
+    where
+        Self: Sized,Self:HasEvents
+    {
+        <Self as HasEvents>::events()
+    }
+
+    fn relations() -> Vec<impl Relations>
+    where
+        Self: Sized,Self:HasRelations
+    {
+        <Self as HasRelations>::relations()
     }
 
     fn as_record(&self) -> RecordRef<Self> {

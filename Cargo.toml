@@ -16,7 +16,8 @@ tokio = { version = "1.41.1", features = ["full"]}
 magritte_macros = { version = "0", path = "magritte_macros", default-features = false }
 magritte_query = { version = "0", path = "magritte_query", default-features = false }
 surrealdb = { version = "2", features = ["default","scripting",] }
-futures = { version = "0.3", default-features = false, features = ["std"] }
+futures = { version = "0.3", default-features = false, features = ["std", "thread-pool"] }
+futures-util = { version = "0.3.31",features = ["std"] }
 log = { version = "0.4", default-features = false }
 moka = { version = "0.12.8",features = ["default","future"] }
 deadpool = { version = "0.12.1", features = ["rt_tokio_1", "serde"] }

@@ -16,9 +16,6 @@ async fn main() -> Result<()> {
         Commands::Init => {
             init_migrations_dir(&cli.migrations_dir).await?;
         }
-        Commands::Create { name } => {
-            create_migration(&cli.migrations_dir, &name).await?;
-        }
         Commands::Snapshot { action } => match action {
             SnapshotCommands::Save { name } => {
                 save_snapshot(&cli.migrations_dir, name).await?;
@@ -58,12 +55,6 @@ pub(crate) enum Commands {
     /// Initialize migrations directory
     Init,
 
-    /// Create a new migration
-    Create {
-        #[arg(help = "Name of the migration")]
-        name: String,
-    },
-
     /// Create and manage schema snapshots
     Snapshot {
         #[command(subcommand)]
@@ -93,18 +84,6 @@ pub(crate) async fn init_migrations_dir(path: &PathBuf) -> Result<()> {
 
     std::fs::create_dir_all(path)?;
     println!("{}", style("Initialized migrations directory").green());
-    Ok(())
-}
-
-pub(crate) async fn create_migration(dir: &PathBuf, name: &str) -> Result<()> {
-    let timestamp = FlexibleDateTime::now().to_string();
-    let filename = format!("{}_{}.surql", timestamp, name);
-    let path = dir.join(filename);
-
-    let template = format!("-- Migration: {}\n\n-- Up\n\n-- Down\n", name);
-
-    std::fs::write(&path, template)?;
-    println!("{} {}", style("Created migration:").green(), path.display());
     Ok(())
 }
 

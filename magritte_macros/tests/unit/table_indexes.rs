@@ -93,7 +93,7 @@ fn test_user_model_indexes_derive() {
 #[test]
 fn test_index_statements() {
     // Test PriceIdx statement
-    let price_idx_stmt = match ProductIndexes::PriceIdx.to_statement() {
+    let price_idx_stmt = match ProductIndexes::PriceIdx.to_statement().build() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
@@ -111,7 +111,7 @@ fn test_index_statements() {
     assert!(!price_idx_stmt.contains("CONCURRENTLY"));
 
     // Test NameIdx statement
-    let name_idx_stmt = match ProductIndexes::NameIdx.to_statement() {
+    let name_idx_stmt = match ProductIndexes::NameIdx.to_statement().build() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
@@ -128,7 +128,7 @@ fn test_index_statements() {
     assert!(name_idx_stmt.contains("CONCURRENTLY"));
 
     // Test EmailIdx statement
-    let email_idx_stmt = match UserIndexes::EmailIdx.to_statement() {
+    let email_idx_stmt = match UserIndexes::EmailIdx.to_statement().build() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
@@ -145,7 +145,7 @@ fn test_index_statements() {
     assert!(!email_idx_stmt.contains("CONCURRENTLY"));
 
     // Test NameIdx statement
-    let name_idx_stmt = match UserIndexes::NameIdx.to_statement() {
+    let name_idx_stmt = match UserIndexes::NameIdx.to_statement().build() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
@@ -165,13 +165,13 @@ fn test_index_statements() {
 #[test]
 fn test_index_enum_iteration() {
     // Test ProductIndexes iteration
-    let product_indexes: Vec<_> = Product::indexes().collect();
+    let product_indexes: Vec<_> = <Product as HasIndexes>::indexes();
     assert_eq!(product_indexes.len(), 2);
     assert!(product_indexes.contains(&ProductIndexes::PriceIdx));
     assert!(product_indexes.contains(&ProductIndexes::NameIdx));
 
     // Test UserIndexes iteration
-    let user_model_indexes: Vec<_> = User::indexes().collect();
+    let user_model_indexes: Vec<_> = <User as HasIndexes>::indexes();
     assert_eq!(user_model_indexes.len(), 2);
     assert!(user_model_indexes.contains(&UserIndexes::EmailIdx));
     assert!(user_model_indexes.contains(&UserIndexes::NameIdx));

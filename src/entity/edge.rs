@@ -1,9 +1,10 @@
 use crate::entity::HasColumns;
-use crate::ColumnTrait;
+use crate::{ColumnTrait, EventTrait, HasEvents, HasIndexes, IndexTrait};
 use magritte_query::define_edge::DefineEdgeStatement;
 use magritte_query::types::{EdgeType, Permission, SchemaType, TableType};
 use std::fmt::{Debug, Display};
 use std::time::Duration;
+use magritte_query::RecordRef;
 
 /// Defines an Edge for a Table
 #[derive(Debug, Clone, PartialEq)]
@@ -22,7 +23,7 @@ pub struct EdgeDef {
     pub(crate) comment: Option<String>,
 }
 
-pub trait EdgeTrait: EdgeType + HasColumns {
+pub trait EdgeTrait: EdgeType + HasColumns  {
     type EntityFrom: TableType;
     type EntityTo: TableType;
     fn def() -> EdgeDef;
@@ -37,11 +38,28 @@ pub trait EdgeTrait: EdgeType + HasColumns {
         self.def_owned().to_statement()
     }
 
-    fn columns() -> impl IntoIterator<Item = impl ColumnTrait>
+    fn columns() -> Vec<impl ColumnTrait>
     where
         Self: Sized,
     {
         <Self as HasColumns>::columns()
+    }
+
+    fn events() -> Vec<impl EventTrait>
+    where
+        Self: Sized,Self:HasEvents {
+        <Self as HasEvents>::events()
+    }
+
+    fn indexes() -> Vec<impl IndexTrait>
+    where
+        Self: Sized,Self:HasIndexes
+    {
+        <Self as HasIndexes>::indexes()
+    }
+
+    fn as_record(&self) -> RecordRef<Self> {
+        RecordRef::new()
     }
 }
 

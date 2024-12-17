@@ -8,11 +8,11 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use crate::transaction::Transactional;
 use crate::{
     Callable, CanCallFunctions, CountFunction, FromTarget, HasConditions, HasLetConditions,
     HasParams, HasProjections, HasVectorConditions, Indexable, Operator, OrderBy, Projection,
-    RangeTarget, RecordType, SqlValue, SurrealDB, SurrealId, VectorCondition, VectorSearch,
+    RangeTarget, RecordType, SqlValue, SurrealDB, SurrealId, VectorCondition,
+    VectorSearch,
 };
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
@@ -26,31 +26,30 @@ pub struct SelectStatement<T>
 where
     T: RecordType,
 {
-    targets: Option<Vec<FromTarget<T>>>,
-    select_value: bool,
-    with_id: Option<SurrealId<T>>,
-    only: bool,
-    selected_fields: Vec<Projection>,
-    omitted_fields: Option<Vec<String>>,
-    conditions: Vec<(String, Operator, SqlValue)>,
-    order_by: Vec<(OrderBy, bool)>,
-    group_by: Vec<String>,
-    all: bool,
-    limit: Option<usize>,
-    start: Option<String>,
-    parameters: Vec<(String, Value)>,
-    split_fields: Vec<String>,
-    fetch_fields: Vec<String>,
-    parallel: bool,
-    with_index: Option<Vec<String>>,
-    tempfiles: bool,
-    timeout: Option<Duration>,
-    vector_conditions: Vec<VectorCondition>,
-    explain: Option<bool>,
-    version: Option<String>,
-    let_statements: Vec<(String, String)>,
-    in_transaction: bool,
-    _marker: PhantomData<T>,
+    pub(crate) targets: Option<Vec<FromTarget<T>>>,
+    pub(crate) select_value: bool,
+    pub(crate) with_id: Option<SurrealId<T>>,
+    pub(crate) only: bool,
+    pub(crate) selected_fields: Vec<Projection>,
+    pub(crate) omitted_fields: Option<Vec<String>>,
+    pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
+    pub(crate) order_by: Vec<(OrderBy, bool)>,
+    pub(crate) group_by: Vec<String>,
+    pub(crate) all: bool,
+    pub(crate) limit: Option<usize>,
+    pub(crate) start: Option<String>,
+    pub(crate) parameters: Vec<(String, Value)>,
+    pub(crate) split_fields: Vec<String>,
+    pub(crate) fetch_fields: Vec<String>,
+    pub(crate) parallel: bool,
+    pub(crate) with_index: Option<Vec<String>>,
+    pub(crate) tempfiles: bool,
+    pub(crate) timeout: Option<Duration>,
+    pub(crate) vector_conditions: Vec<VectorCondition>,
+    pub(crate) explain: Option<bool>,
+    pub(crate) version: Option<String>,
+    pub(crate) let_statements: Vec<(String, String)>,
+    phantom_data: PhantomData<T>,
 }
 
 // Base implementation for all states
@@ -119,7 +118,11 @@ where
 
     /// Add a subquery to SELECT fields
     #[instrument(skip_all)]
-    pub fn subquery<U>(mut self, subquery: SelectStatement<U>, alias: Option<&str>) -> Result<Self>
+    pub fn subquery<U>(
+        mut self,
+        subquery: SelectStatement<U>,
+        alias: Option<&str>,
+    ) -> Result<Self>
     where
         U: RecordType,
     {
@@ -425,9 +428,8 @@ where
             explain: None,
             version: None,
             let_statements: vec![],
-            _marker: PhantomData,
+            phantom_data: PhantomData,
             with_id: None,
-            in_transaction: false,
         }
     }
 
@@ -705,15 +707,5 @@ where
     }
 }
 
-impl<T> Transactional for SelectStatement<T>
-where
-    T: RecordType,
-{
-    fn is_transaction(&self) -> bool {
-        self.in_transaction
-    }
-
-    fn in_transaction(&mut self) -> &mut bool {
-        &mut self.in_transaction
-    }
-}
+pub trait SelectStatementTrait {}
+impl<T> SelectStatementTrait for SelectStatement<T> where T: RecordType {}

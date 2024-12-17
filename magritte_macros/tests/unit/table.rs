@@ -81,14 +81,14 @@ fn test_table_derives() {
 }
 
 #[test]
-fn test_statement_generation() {
+fn test_statement_generation() -> Result<()> {
     // Test basic column statement
-    let name_stmt = ProductColumns::Name.def().to_statement();
+    let name_stmt = ProductColumns::Name.def().to_statement().build()?;
     assert!(name_stmt.contains("DEFINE FIELD name ON TABLE products"));
     assert!(name_stmt.contains("TYPE string"));
 
     // Test full column statement
-    let price_stmt = ProductColumns::Price.def().to_statement();
+    let price_stmt = ProductColumns::Price.def().to_statement().build()?;
     assert!(price_stmt.contains("DEFINE FIELD price ON TABLE products"));
     assert!(price_stmt.contains("FLEXIBLE"));
     assert!(price_stmt.contains("TYPE float|null"));
@@ -97,6 +97,7 @@ fn test_statement_generation() {
     assert!(price_stmt.contains("PERMISSIONS"));
     assert!(price_stmt.contains("READONLY"));
     assert!(price_stmt.contains("COMMENT"));
+    Ok(())
 }
 
 #[test]

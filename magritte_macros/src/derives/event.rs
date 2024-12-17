@@ -89,6 +89,11 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
                 use strum::IntoEnumIterator;
                 #ident::iter().collect::<Vec<_>>()
             }
+
+            fn event_defs() -> Vec<#crate_name::EventDef> {
+                use strum::IntoEnumIterator;
+                #ident::iter().map(|e| e.def()).collect()
+            }
         }
 
         #[automatically_derived]

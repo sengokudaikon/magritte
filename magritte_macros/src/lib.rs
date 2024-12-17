@@ -140,7 +140,7 @@
 //! - Schema consistency
 
 #![feature(duration_constructors)]
-#![feature(structural_match)]
+#![feature(min_specialization)]
 #![allow(unused)]
 extern crate proc_macro;
 mod conversion;
