@@ -26,15 +26,16 @@ pub struct UpsertStatement<T>
 where
     T: RecordType,
 {
-    pub(crate) targets: Option<Vec<FromTarget<T>>>,
-    pub(crate) with_id: Option<SurrealId<T>>,
-    pub(crate) only: bool,
-    pub(crate) content: Option<Content>,
-    pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
-    pub(crate) parameters: Vec<(String, serde_json::Value)>,
-    pub(crate) parallel: bool,
-    pub(crate) timeout: Option<Duration>,
-    pub(crate) return_type: Option<ReturnType>,
+    targets: Option<Vec<FromTarget<T>>>,
+    with_id: Option<SurrealId<T>>,
+    only: bool,
+    content: Option<Content>,
+    conditions: Vec<(String, Operator, SqlValue)>,
+    parameters: Vec<(String, serde_json::Value)>,
+    parallel: bool,
+    timeout: Option<Duration>,
+    return_type: Option<ReturnType>,
+    in_transaction: bool,
     _marker: PhantomData<T>,
 }
 
@@ -43,7 +44,7 @@ where
     T: RecordType,
 {
     #[instrument(skip_all)]
-    pub fn content<C: Serialize>(mut self, content: C) -> anyhow::Result<Self> {
+    pub fn content<C: Serialize>(mut self, content: &C) -> anyhow::Result<Self> {
         self.content = Some(Content::Content(serde_json::to_value(content)?));
         Ok(self)
     }
@@ -84,7 +85,7 @@ where
         Ok(self)
     }
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             targets: None,
             with_id: None,
@@ -95,11 +96,12 @@ where
             parallel: false,
             timeout: None,
             return_type: Default::default(),
+            in_transaction: false,
             _marker: PhantomData,
         }
     }
 
-    fn build(&self) -> anyhow::Result<String> {
+    pub fn build(&self) -> anyhow::Result<String> {
         let mut query = String::new();
         query.push_str("UPSERT ");
         if self.only {

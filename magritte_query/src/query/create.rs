@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::{FromTarget, RangeTarget, RecordType, ReturnType, Returns, SurrealId};
+use crate::{FromTarget, RangeTarget, RecordType, ReturnType, Returns, SelectStatement, SurrealId};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -15,6 +15,7 @@ use serde::Serialize;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::{error, info, instrument};
+use crate::transaction::Transactional;
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -30,17 +31,18 @@ pub struct CreateStatement<T>
 where
     T: RecordType,
 {
-    pub(crate) with_id: Option<String>,
-    pub(crate) with_range: Option<RangeTarget>,
-    pub(crate) targets: Option<Vec<FromTarget<T>>>,
-    pub(crate) only: bool,
-    pub(crate) content: Option<Content>,
-    pub(crate) parameters: Vec<(String, serde_json::Value)>,
-    pub(crate) parallel: bool,
-    pub(crate) timeout: Option<Duration>,
-    pub(crate) return_type: Option<ReturnType>,
-    pub(crate) version: Option<String>,
-    phantom_data: PhantomData<T>,
+    with_id: Option<String>,
+    with_range: Option<RangeTarget>,
+    targets: Option<Vec<FromTarget<T>>>,
+    only: bool,
+    content: Option<Content>,
+    parameters: Vec<(String, serde_json::Value)>,
+    parallel: bool,
+    timeout: Option<Duration>,
+    return_type: Option<ReturnType>,
+    version: Option<String>,
+    in_transaction: bool,
+    _marker: PhantomData<T>,
 }
 impl<T> CreateStatement<T>
 where
@@ -120,7 +122,7 @@ where
     }
 
     #[instrument(skip_all)]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             with_id: None,
             with_range: None,
@@ -132,7 +134,8 @@ where
             timeout: None,
             return_type: Default::default(),
             version: None,
-            phantom_data: PhantomData,
+            in_transaction: false,
+            _marker: PhantomData,
         }
     }
     #[instrument(skip_all)]
@@ -231,5 +234,17 @@ where
 {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type
+    }
+}
+impl<T> Transactional for CreateStatement<T>
+where
+    T: RecordType,
+{
+    fn is_transaction(&self) -> bool {
+        self.in_transaction
+    }
+
+    fn in_transaction(&mut self) -> &mut bool {
+        &mut self.in_transaction
     }
 }

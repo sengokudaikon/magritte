@@ -1,4 +1,4 @@
-use crate::RecordType;
+use crate::{RecordType, SurrealDB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 pub mod alter;
@@ -92,5 +92,91 @@ impl Query {
     /// UPSERT statement [`UpsertStatement`]
     pub fn upsert<T: RecordType>() -> UpsertStatement<T> {
         UpsertStatement::new()
+    }
+
+    /// Begin a transaction
+    pub fn begin() -> TransactionStatement {
+        TransactionStatement::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionStatement {
+    statements: Vec<String>,
+}
+
+impl TransactionStatement {
+    pub fn new() -> Self {
+        Self {
+            statements: vec!["BEGIN TRANSACTION".to_string()],
+        }
+    }
+
+    pub fn then<S: StatementBuilder>(mut self, statement: S) -> Self {
+        self.statements.push(statement.build().unwrap());
+        self
+    }
+
+    pub fn commit(mut self) -> Self {
+        self.statements.push("COMMIT TRANSACTION".to_string());
+        self
+    }
+
+    pub fn rollback(mut self) -> Self {
+        self.statements.push("CANCEL TRANSACTION".to_string());
+        self
+    }
+
+    pub fn build(&self) -> String {
+        self.statements.join("; ") + ";"
+    }
+
+    pub async fn execute(self, db: &SurrealDB) -> anyhow::Result<()> {
+        db.query(self.build()).await?;
+        Ok(())
+    }
+}
+
+pub trait StatementBuilder {
+    fn build(&self) -> anyhow::Result<String>;
+}
+
+impl StatementBuilder for AlterStatement {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
+    }
+}
+
+impl<T: RecordType> StatementBuilder for SelectStatement<T> {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
+    }
+}
+
+impl<T: RecordType> StatementBuilder for InsertStatement<T> {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
+    }
+}
+
+impl<T: RecordType> StatementBuilder for UpdateStatement<T> {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
+    }
+}
+impl StatementBuilder for RelateStatement {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
+    }
+}
+impl<T: RecordType> StatementBuilder for DeleteStatement<T> {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
+    }
+}
+
+impl<T: RecordType> StatementBuilder for UpsertStatement<T> {
+    fn build(&self) -> anyhow::Result<String> {
+        self.build()
     }
 }

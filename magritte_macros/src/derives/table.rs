@@ -157,6 +157,12 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
                 builder: || #crate_name::table_snapshot::<#ident #type_generics>()
             }
         }
+
+        // Register for entity proxy generation separately
+        inventory::submit! {
+            #crate_name::EntityProxyRegistration::new::<#ident #type_generics>()
+        }
+        #crate_name::impl_entity_flush!(#ident #type_generics);
     };
 
     Ok(expanded)

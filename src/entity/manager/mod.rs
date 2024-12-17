@@ -1,63 +1,112 @@
-use crate::entity::{EntityCache, LoadStrategy};
-use crate::{ColumnTrait, HasColumns, HasRelations, RelationDef, RelationTrait, TableTrait};
-use anyhow::Result;
-use magritte_query::{HasId, NamedType, Query, RecordType, SurrealDB, SurrealId};
+pub(crate) mod cache;
+pub(crate) mod macros;
+pub(crate) mod registry;
+
+use crate::entity::manager::cache::EntityCache;
+use crate::entity::manager::unsafe_em::TypeErasedState;
+use crate::{
+    ColumnTrait, EdgeTrait, HasColumns, HasId, HasRelations, NamedType, RecordType, RelationTrait,
+    TableTrait,
+};
+use anyhow::{anyhow, Result};
+pub use macros::*;
+use magritte_query::{HasId as _, Query, SurrealDB, SurrealId};
 use serde::de::DeserializeOwned;
-use std::any::{Any, TypeId};
+use serde_json::Value;
+use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EntityState {
-    New,
-    Managed,
-    Detached,
-    Removed,
+/// Type-safe container for entity state tracking
+#[derive(Default)]
+pub struct EntityState<T: TableTrait> {
+    pub new: Vec<T>,
+    pub managed: HashMap<String, T>,
+    pub removed: Vec<T>,
+    pub dirty: HashSet<String>,
+}
+
+impl<T: TableTrait> EntityState<T> {
+    pub fn new() -> Self {
+        Self {
+            new: Vec::new(),
+            managed: HashMap::new(),
+            removed: Vec::new(),
+            dirty: HashSet::new(),
+        }
+    }
 }
 
 pub struct UnitOfWork {
-    new: HashMap<TypeId, Vec<Box<dyn Any + Send + Sync>>>,
-    managed: HashMap<TypeId, HashMap<String, Box<dyn Any + Send + Sync>>>,
-    removed: HashMap<TypeId, Vec<Box<dyn Any + Send + Sync>>>,
-    dirty: HashMap<TypeId, HashSet<String>>,
+    states: HashMap<TypeId, TypeErasedState>,
 }
 
+impl Default for UnitOfWork {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl UnitOfWork {
     pub fn new() -> Self {
         Self {
-            new: HashMap::new(),
-            managed: HashMap::new(),
-            removed: HashMap::new(),
-            dirty: HashMap::new(),
+            states: HashMap::new(),
         }
     }
 
-    pub fn mark_new<T: 'static + Send + Sync>(&mut self, entity: T) {
+    fn get_or_create_state<T: TableTrait + 'static>(&mut self) -> &mut EntityState<T> {
         let type_id = TypeId::of::<T>();
-        self.new.entry(type_id).or_default().push(Box::new(entity));
+        self.states
+            .entry(type_id)
+            .or_insert_with(|| TypeErasedState::new(EntityState::<T>::new()));
+        // Safety: We just checked the type_id matches
+        unsafe { self.states.get_mut(&type_id).unwrap().as_mut().unwrap() }
     }
 
-    pub fn mark_managed<T: 'static + Send + Sync + HasId>(&mut self, entity: T) {
-        let type_id = TypeId::of::<T>();
+    pub fn mark_new<T>(&mut self, entity: T)
+    where
+        T: TableTrait + 'static,
+    {
+        let state = self.get_or_create_state::<T>();
+        state.new.push(entity);
+    }
+
+    pub fn mark_managed<T>(&mut self, entity: T)
+    where
+        T: TableTrait + HasId + 'static,
+    {
+        let state = self.get_or_create_state::<T>();
         let id = entity.id().to_string();
-        self.managed
-            .entry(type_id)
-            .or_default()
-            .insert(id, Box::new(entity));
+        state.managed.insert(id, entity);
     }
 
-    pub fn mark_removed<T: 'static + Send + Sync>(&mut self, entity: T) {
-        let type_id = TypeId::of::<T>();
-        self.removed
-            .entry(type_id)
-            .or_default()
-            .push(Box::new(entity));
+    pub fn mark_removed<T>(&mut self, entity: T)
+    where
+        T: TableTrait + 'static,
+    {
+        let state = self.get_or_create_state::<T>();
+        state.removed.push(entity);
     }
 
-    pub fn mark_dirty<T: 'static>(&mut self, id: String) {
-        let type_id = TypeId::of::<T>();
-        self.dirty.entry(type_id).or_default().insert(id);
+    pub fn mark_dirty<T>(&mut self, id: String)
+    where
+        T: TableTrait + 'static,
+    {
+        let state = self.get_or_create_state::<T>();
+        state.dirty.insert(id);
+    }
+
+    pub fn get_state<T: TableTrait + 'static>(&self) -> Option<&EntityState<T>> {
+        self.states
+            .get(&TypeId::of::<T>())
+            .and_then(|state| unsafe { state.as_ref() })
+    }
+
+    pub fn get_state_mut<T: TableTrait + 'static>(&mut self) -> Option<&mut EntityState<T>> {
+        self.states
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|state| unsafe { state.as_mut() })
     }
 }
 
@@ -78,80 +127,24 @@ impl Default for LoadingConfig {
     }
 }
 
-#[async_trait::async_trait]
-pub trait LoadingHandler: Send + Sync {
-    async fn load_relation<R>(
-        &self,
-        source_id: &str,
-        relation: R,
-    ) -> Result<(R::Source, Vec<R::Target>)>
-    where
-        R: RelationTrait + 'static + Send + Sync,
-        R::Source: RecordType + HasId + Send + Sync + 'static,
-        R::Target: RecordType + HasId + Send + Sync + 'static;
-}
-
-pub struct DefaultLoadingHandler {
-    entity_manager: Arc<EntityManager>,
-}
-
-impl DefaultLoadingHandler {
-    pub fn new(entity_manager: Arc<EntityManager>) -> Self {
-        Self { entity_manager }
-    }
-}
-
-#[async_trait::async_trait]
-impl LoadingHandler for DefaultLoadingHandler {
-    async fn load_relation<R>(
-        &self,
-        source_id: &str,
-        relation: R,
-    ) -> Result<(R::Source, Vec<R::Target>)>
-    where
-        R: RelationTrait + 'static + Send + Sync,
-        R::Source: TableTrait + HasId + Send + Sync + 'static,
-        R::Target: TableTrait + HasId + Send + Sync + 'static,
-    {
-        let def = relation.def_owned();
-        let relation_name = def.relation_name();
-
-        // Build the query manually
-        let query = Query::select()
-            .field("*", None)
-            .field(def.relation_to(), Some(relation_name))
-            .fetch(&[relation_name])
-            .where_id(SurrealId::<R::Source>::from(source_id));
-
-        let results = query.execute(self.entity_manager.db()).await.map_err(anyhow::Error::from)?;
-        if results.is_empty() {
-            return Err(anyhow::anyhow!("Source entity not found"));
-        }
-
-        let value = &results[0];
-        let (source, targets) = self
-            .entity_manager
-            .parse_with_related_result::<R::Source, R::Target>(value, relation_name)?;
-        self.entity_manager
-            .cache_entity_and_relations::<R::Source, R::Target>(&def, source_id, &source, &targets)
-            .await?;
-        Ok((source, targets))
-    }
-}
-
+/// Our EntityManager
+#[derive(Clone)]
 pub struct EntityManager {
     db: SurrealDB,
     cache: Arc<EntityCache>,
-    unit_of_work: RwLock<UnitOfWork>,
+    unit_of_work: Arc<RwLock<UnitOfWork>>,
     loading_config: LoadingConfig,
 }
 
 impl EntityManager {
     pub fn new(db: SurrealDB, cache: EntityCache, config: Option<LoadingConfig>) -> Self {
+        // Ensure all registrations are collected
+        let _ = registry::get_registered_entities();
+
         Self {
             db,
             cache: Arc::new(cache),
-            unit_of_work: RwLock::new(UnitOfWork::new()),
+            unit_of_work: Arc::new(RwLock::new(UnitOfWork::new())),
             loading_config: config.unwrap_or_default(),
         }
     }
@@ -164,192 +157,130 @@ impl EntityManager {
         Arc::new(Self {
             db: self.db.clone(),
             cache: self.cache.clone(),
-            unit_of_work: RwLock::new(UnitOfWork::new()),
+            unit_of_work: Arc::new(RwLock::new(UnitOfWork::new())),
             loading_config: self.loading_config.clone(),
         })
     }
 
-    /// Find an entity by ID, loading record<...> fields eagerly and also caching eager edge relations.
-    /// Returns just `T`, with record fields embedded. Eager edge relations are cached but not returned here.
+    /// Finds an entity by ID, caching it if not present.
     pub async fn find<T>(&self, id: &str) -> Result<Option<T>>
     where
-        T: RecordType + HasId + HasColumns + HasRelations + Send + Sync + 'static,
+        T: TableTrait + HasId + HasColumns + HasRelations + Send + Sync + 'static,
     {
         // Check cache first
         if let Some(entity) = self.cache.get_entity::<T>(T::table_name(), id).await? {
             return Ok(Some(entity));
         }
 
-        let mut qb = Query::select().only();
-
-        // Record fields to fetch
-        let record_fields: Vec<&str> = T::column_defs()
-            .into_iter()
-            .filter(|c| c.is_record())
-            .map(|c| c.name())
-            .collect();
-
-        // Eager relations
-        let eager_relations: Vec<&str> = T::relation_defs()
-            .into_iter()
-            .filter(|r| r.load_strategy() == LoadStrategy::Eager)
-            .map(|r| r.relation_name())
-            .collect();
-
-        let all_fetches: Vec<&str> = record_fields
-            .iter()
-            .chain(eager_relations.iter())
-            .copied()
-            .collect();
-        if !all_fetches.is_empty() {
-            qb = qb.fetch(&all_fetches);
+        // Just select the entity:
+        let mut results: Vec<T> = Query::select::<T>()
+            .where_id(SurrealId::<T>::from(id))
+            .execute(self.db())
+            .await
+            .map_err(anyhow::Error::from)?;
+        if let Some(entity) = results.pop() {
+            self.cache
+                .cache_entity(T::table_name(), id, &entity)
+                .await?;
+            Ok(Some(entity))
+        } else {
+            Ok(None)
         }
-
-        qb = qb.where_id(SurrealId::<T>::from(id));
-
-        let mut entities = qb.execute(self.db()).await.map_err(anyhow::Error::from)?;
-        let entity = match entities.pop() {
-            Some(e) => e,
-            None => return Ok(None),
-        };
-
-        // Cache the loaded entity
-        self.cache
-            .cache_entity(T::table_name(), id, &entity)
-            .await?;
-
-        // If there are eager edge relations, they are now fetched and included in `entity`. We assume SurrealDB
-        // returns them under fields named after `relation_name`. Extract and cache them:
-        for relation_name in eager_relations {
-            // Extract related entities from JSON
-            let targets: Vec<serde_json::Value> =
-                entity_extract_relation_field(&entity, relation_name);
-            // Deserialize each target and cache them
-            let mut target_ids = Vec::new();
-            for tjson in targets {
-                let t: serde_json::Value = tjson;
-                // We don't know the target type from here directly. You have two options:
-                // 1) If you know the target type from `relation_defs`, you can do a runtime dispatch.
-                // 2) You can rely on load_relation calls later.
-                //
-                // For simplicity, just store the JSON and the IDs in the cache. Let's assume we have a way
-                // to identify the target table and ID from `t`.
-                //
-                // Realistically, you'd need a typed approach here similar to load_relation_fresh.
-                // For this demonstration, we just skip detailed caching of eager edges. Instead:
-                // The user will call load_relation later to get typed data. Since we have the data now,
-                // we could parse and cache it if we knew the target type. Without that, we might need
-                // a runtime registry.
-            }
-        }
-
-        Ok(Some(entity))
     }
 
-    /// Loads a given relation (lazy or eager) on-demand. Returns (Source, Vec<Target>).
-    /// If eager and previously fetched, this should be cached, otherwise it queries again.
+    /// Load a given relation. Returns (Source, Vec<Target>) for potentially multiple targets.
     pub async fn load_relation<R>(
         &self,
-        entity_id: &str,
+        source_id: &str,
         relation: R,
     ) -> Result<(R::Source, Vec<R::Target>)>
     where
         R: RelationTrait + 'static + Send + Sync,
-        R::Source: RecordType + HasId + 'static + Send + Sync,
-        R::Target: RecordType + HasId + 'static + Send + Sync,
+        R::Source: TableTrait + HasId + Send + Sync + 'static,
+        R::Target: TableTrait + HasId + Send + Sync + 'static,
     {
-        let def = relation.def();
-        let relation_name = def.relation_name();
-
+        // Try cache first:
+        let def = relation.def_owned();
         if let Some(cached_ids) = self.cache.get_related_ids(&def).await? {
             let source = self
                 .cache
-                .get_entity::<R::Source>(R::Source::table_name(), entity_id)
+                .get_entity::<R::Source>(R::Source::table_name(), source_id)
                 .await?
-                .ok_or_else(|| anyhow::anyhow!("Source not found in cache"))?;
+                .ok_or_else(|| anyhow!("Source not cached"))?;
 
             let mut targets = Vec::new();
-            for rid in cached_ids {
-                if let Some(target) = self
+            let mut all_cached = true;
+            for tid in &cached_ids {
+                if let Some(t) = self
                     .cache
-                    .get_entity::<R::Target>(R::Target::table_name(), &rid)
+                    .get_entity::<R::Target>(R::Target::table_name(), tid)
                     .await?
                 {
-                    targets.push(target);
+                    targets.push(t);
                 } else {
-                    // Not all targets cached, load fresh:
-                    return self.load_relation_fresh(entity_id, relation).await;
+                    all_cached = false;
+                    break;
                 }
             }
-            return Ok((source, targets));
+
+            if all_cached {
+                return Ok((source, targets));
+            }
+            // Otherwise, fall through to fresh load
         }
 
-        // Not cached, load fresh
-        self.load_relation_fresh(entity_id, relation).await
+        self.load_relation_fresh::<R>(source_id).await
     }
 
-    async fn load_relation_fresh<R>(
-        &self,
-        entity_id: &str,
-        relation: R,
-    ) -> Result<(R::Source, Vec<R::Target>)>
+    async fn load_relation_fresh<R>(&self, source_id: &str) -> Result<(R::Source, Vec<R::Target>)>
     where
         R: RelationTrait + 'static + Send + Sync,
-        R::Source: RecordType + HasId + 'static + Send + Sync,
-        R::Target: RecordType + HasId + 'static + Send + Sync,
+        R::Source: TableTrait + HasId + Send + Sync + 'static,
+        R::Target: TableTrait + HasId + Send + Sync + 'static,
     {
-        let handler = DefaultLoadingHandler::new(self.clone_self());
-        handler.load_relation(entity_id, relation).await
-    }
+        let def = R::def();
+        let sql = format!(
+            "SELECT *, ->{}->{} AS rel_targets FROM {}:{}",
+            def.relation_name(),
+            R::Target::table_name(),
+            R::Source::table_name(),
+            source_id
+        );
 
-    fn parse_with_related_result<S, T>(
-        &self,
-        value: &serde_json::Value,
-        relation_name: &str,
-    ) -> Result<(S, Vec<T>)>
-    where
-        S: DeserializeOwned,
-        T: DeserializeOwned,
-    {
-        let source: S = serde_json::from_value(value.clone())?;
-        let targets_json = value
-            .get(relation_name)
-            .cloned()
-            .unwrap_or(serde_json::Value::Array(vec![]));
-        let targets: Vec<T> = serde_json::from_value(targets_json)?;
-        Ok((source, targets))
-    }
+        let mut results: Vec<Value> = self.db.query(sql).await?.take(0)?;
+        if results.is_empty() {
+            return Err(anyhow!("No source found"));
+        }
 
-    async fn cache_entity_and_relations<S, T>(
-        &self,
-        def: &RelationDef,
-        source_id: &str,
-        source: &S,
-        targets: &[T],
-    ) -> Result<()>
-    where
-        S: HasId + RecordType,
-        T: HasId + RecordType,
-    {
+        let row = results.remove(0);
+        let source: R::Source = serde_json::from_value(row.clone())?;
+        let targets: Vec<R::Target> = match row.get("rel_targets") {
+            Some(val) => serde_json::from_value(val.clone())?,
+            None => vec![],
+        };
+
+        // Cache entities
         self.cache
-            .cache_entity(S::table_name(), source_id, source)
+            .cache_entity(R::Source::table_name(), source_id, &source)
             .await?;
-
-        let ids: Vec<String> = targets.iter().map(|t| t.id().to_string()).collect();
-        self.cache.cache_relation_ids(def, ids.clone()).await?;
-
-        for t in targets {
+        let target_ids: Vec<_> = targets.iter().map(|t| t.id().to_string()).collect();
+        for t in &targets {
             self.cache
-                .cache_entity(T::table_name(), &t.id().to_string(), t)
+                .cache_entity(R::Target::table_name(), &t.id().to_string(), t)
                 .await?;
         }
 
-        Ok(())
+        // Cache relation IDs
+        self.cache
+            .cache_relation_ids(&def, source_id.parse()?, target_ids)
+            .await?;
+
+        Ok((source, targets))
     }
 
     pub async fn persist<T>(&self, entity: T) -> Result<()>
     where
-        T: RecordType + HasId + Send + Sync + 'static,
+        T: TableTrait + HasId + Send + Sync + 'static,
     {
         let mut uow = self.unit_of_work.write().await;
         uow.mark_new(entity);
@@ -358,7 +289,7 @@ impl EntityManager {
 
     pub async fn manage<T>(&self, entity: T) -> Result<()>
     where
-        T: RecordType + HasId + Send + Sync + 'static,
+        T: TableTrait + HasId + Send + Sync + 'static,
     {
         let mut uow = self.unit_of_work.write().await;
         uow.mark_managed(entity);
@@ -367,7 +298,7 @@ impl EntityManager {
 
     pub async fn remove<T>(&self, entity: T) -> Result<()>
     where
-        T: RecordType + HasId + Send + Sync + 'static,
+        T: TableTrait + HasId + Send + Sync + 'static,
     {
         let mut uow = self.unit_of_work.write().await;
         uow.mark_removed(entity);
@@ -377,36 +308,17 @@ impl EntityManager {
     pub async fn flush(&self) -> Result<()> {
         let mut uow = self.unit_of_work.write().await;
 
-        // Handle new entities
-        for (_type_id, entities) in uow.new.drain() {
-            for _entity in entities {
-                // TODO: downcast and insert using CRUD
-            }
-        }
-
-        // Handle removed entities
-        for (_type_id, entities) in uow.removed.drain() {
-            for _entity in entities {
-                // TODO: downcast and delete using CRUD
-            }
-        }
-
-        // Handle dirty entities
-        for (_type_id, ids) in uow.dirty.drain() {
-            for _id in ids {
-                // TODO: update entities
-            }
+        // The actual flushing is now handled by the generated code from impl_entity_flush!
+        // which will try each registered entity type
+        for state in uow.states.values_mut() {
+            self.flush_entity_state(state).await?;
         }
 
         Ok(())
     }
 
     pub async fn clear(&self) -> Result<()> {
-        let mut uow = self.unit_of_work.write().await;
-        uow.new.clear();
-        uow.managed.clear();
-        uow.removed.clear();
-        uow.dirty.clear();
+        self.unit_of_work.write().await.states.clear();
         self.cache.clear().await;
         Ok(())
     }
@@ -414,16 +326,94 @@ impl EntityManager {
     pub fn cache(&self) -> Arc<EntityCache> {
         self.cache.clone()
     }
+
+    pub async fn transaction<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&EntityManager) -> futures::future::BoxFuture<'_, Result<R>>,
+    {
+        // Create a transaction context
+        let mut transaction = Query::begin();
+
+        match f(self).await {
+            Ok(r) => {
+                // On success, flush changes and build commit
+                self.flush().await?;
+                transaction
+                    .commit()
+                    .execute(&self.db)
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                Ok(r)
+            }
+            Err(e) => {
+                // On error, build rollback
+                transaction
+                    .rollback()
+                    .execute(&self.db)
+                    .await
+                    .map_err(anyhow::Error::from)?;
+                Err(e)
+            }
+        }
+    }
 }
 
-/// Extracts related entities from a SurrealDB returned entity.
-/// This is just a helper function for demonstration. Adjust as needed.
-fn entity_extract_relation_field(
-    entity: &serde_json::Value,
-    relation_name: &str,
-) -> Vec<serde_json::Value> {
-    match entity.get(relation_name) {
-        Some(serde_json::Value::Array(arr)) => arr.clone(),
-        _ => vec![],
+pub mod unsafe_em {
+    use crate::entity::manager::EntityState;
+    use crate::TableTrait;
+    use std::any::TypeId;
+
+    /// Raw pointer wrapper for type-erased but safe access
+    pub struct TypeErasedState {
+        ptr: *mut (),
+        drop: unsafe fn(*mut ()),
+        type_id: TypeId,
     }
+
+    impl TypeErasedState {
+        pub fn new<T: TableTrait>(state: EntityState<T>) -> Self {
+            unsafe fn drop_impl<TT: TableTrait>(ptr: *mut ()) {
+                drop(Box::from_raw(ptr as *mut EntityState<TT>));
+            }
+
+            let boxed = Box::new(state);
+            Self {
+                ptr: Box::into_raw(boxed) as *mut (),
+                drop: drop_impl::<T>,
+                type_id: TypeId::of::<T>(),
+            }
+        }
+
+        /// # Safety
+        ///
+        /// The caller must ensure the type is correct
+        pub unsafe fn as_ref<T: TableTrait>(&self) -> Option<&EntityState<T>> {
+            if TypeId::of::<T>() == self.type_id {
+                Some(&*(self.ptr as *const EntityState<T>))
+            } else {
+                None
+            }
+        }
+
+        /// # Safety
+        ///
+        /// The caller must ensure the type is correct
+        pub unsafe fn as_mut<T: TableTrait>(&mut self) -> Option<&mut EntityState<T>> {
+            if TypeId::of::<T>() == self.type_id {
+                Some(&mut *(self.ptr as *mut EntityState<T>))
+            } else {
+                None
+            }
+        }
+    }
+
+    impl Drop for TypeErasedState {
+        fn drop(&mut self) {
+            unsafe { (self.drop)(self.ptr) }
+        }
+    }
+
+    // Safety: The TypeErasedState ensures proper type checking and memory management
+    unsafe impl Send for TypeErasedState {}
+    unsafe impl Sync for TypeErasedState {}
 }

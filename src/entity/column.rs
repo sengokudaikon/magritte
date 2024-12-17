@@ -1,7 +1,7 @@
+use crate::TableTrait;
 use magritte_query::types::{ColumnType, NamedType, Permission};
 use magritte_query::{Define, DefineFieldStatement};
 use std::fmt::Display;
-use crate::TableTrait;
 
 /// Defines a Column for an Entity
 #[derive(Debug, Clone, PartialEq)]

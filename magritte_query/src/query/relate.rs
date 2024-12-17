@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
-use crate::{RecordType, ReturnType, Returns, SurrealDB};
+use crate::{CreateStatement, RecordType, ReturnType, Returns, SurrealDB};
+use crate::transaction::Transactional;
 
 /// Builder for RELATE statements
 #[derive(Clone, Debug, PartialEq)]
@@ -21,6 +22,7 @@ pub struct RelateStatement {
     return_fields: Option<Vec<String>>,
     timeout: Option<Duration>,
     parallel: bool,
+    in_transaction: bool
 }
 
 impl RelateStatement
@@ -83,6 +85,7 @@ impl RelateStatement
             return_fields: None,
             timeout: None,
             parallel: false,
+            in_transaction: false
         }
     }
 
@@ -161,5 +164,15 @@ impl Returns for RelateStatement
 {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type
+    }
+}
+impl Transactional for RelateStatement
+{
+    fn is_transaction(&self) -> bool {
+        self.in_transaction
+    }
+
+    fn in_transaction(&mut self) -> &mut bool {
+        &mut self.in_transaction
     }
 }

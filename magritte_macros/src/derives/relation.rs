@@ -32,26 +32,16 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
 
     let parent_struct = strip_relations_suffix(ident);
     let parent = &parent_struct;
-
+    let mut variant_match_arms = Vec::new();
     let mut variant_impls = Vec::new();
-    let mut variant_refs = Vec::new();
-    let mut variant_idents = Vec::new();
 
     for variant in &data.variants {
         let variant_name = &variant.ident;
         let mut attrs = Relate::extract_attributes(&mut variant.attrs.clone())?;
-        let in_id = attrs
-            .in_id
-            .take()
-            .ok_or_else(|| syn::Error::new_spanned(variant, "Relation must specify in_id"))?;
         let to_table = attrs.to.take().ok_or_else(|| {
             syn::Error::new_spanned(variant, "Relation must specify target Table")
         })?;
 
-        let out_id = attrs
-            .out_id
-            .take()
-            .ok_or_else(|| syn::Error::new_spanned(variant, "Relation must specify out_id"))?;
         let edge_table = attrs.edge.take().ok_or_else(|| {
             syn::Error::new_spanned(variant, "Relation must specify edge Table")
         })?;
@@ -66,11 +56,9 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
             .map(|c| quote!(Some(#c.to_string())))
             .unwrap_or_else(|| quote!(None));
 
-        let from_str = quote!(<#parent as #crate_name::NamedType>::table_name());
-        let to_str = quote!(<#to_table as #crate_name::NamedType>::table_name());
+        let from = quote!(<#parent as #crate_name::NamedType>::table_name());
+        let to = quote!(<#to_table as #crate_name::NamedType>::table_name());
         let edge_str = quote!(<#edge_table as #crate_name::NamedType>::table_name());
-        let from = quote!(format!("{}:{}", #from_str, #in_id));
-        let to = quote!(format!("{}:{}", #to_str, #out_id));
         let relation_struct_name = syn::Ident::new(
             &format!("{}{}Relation", ident, variant_name),
             variant.span(),
@@ -85,56 +73,55 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
                     #crate_name::RelationDef::new(#from, #to, #edge_str, #content, #load_strategy)
                 }
             }
+
+            #[automatically_derived]
+            impl #crate_name::RelationType for #relation_struct_name {
+                fn relation_via() -> String {
+                    Self::def().relation_name().to_string()
+                }
+
+                fn relation_from() -> String {
+                    Self::def().relation_from().to_string()
+                }
+
+                fn relation_to() -> String {
+                    Self::def().relation_to().to_string()
+                }
+            }
+
+            #[allow(non_camel_case_types)]
+            #[derive(Clone, Copy)]
+            pub struct #relation_struct_name;
         };
 
         variant_impls.push(def_impl);
-        variant_refs.push(quote! {
-            #ident::#variant_name => {
-                // Create a static instance of the relation struct
-                static REL: #relation_struct_name = #relation_struct_name;
-                &REL
-            }
-        });
-        variant_idents.push(variant_name);
-        variant_impls.push(quote! {
-            #[allow(non_camel_case_types)]
-            pub struct #relation_struct_name;
+        variant_match_arms.push(quote! {
+            #ident::#variant_name => #relation_struct_name::def()
         });
     }
 
     let err_type = quote!(#crate_name::RelationFromStrErr);
     let trait_impls = quote! {
+        #(#variant_impls)*
         impl #impl_generics #crate_name::HasRelations for #parent #type_generics #where_clause {
             fn relations() -> Vec<#ident #type_generics> {
                 use strum::IntoEnumIterator;
-                #ident::iter().collect::<Vec<_>>()
+                #ident::iter().collect()
             }
 
             fn relation_defs() -> Vec<#crate_name::RelationDef> {
-                #ident::iter().map(|r| r.as_relation().def_owned()).collect()
+                use strum::IntoEnumIterator;
+                #ident::iter().map(|r| r.relation_def()).collect()
             }
         }
+
+        impl #impl_generics #crate_name::Relations for #ident #type_generics #where_clause {}
 
         impl #impl_generics #ident #type_generics #where_clause {
-            pub fn as_relation(&self) -> &'static (dyn #crate_name::RelationTrait<Source=#parent #type_generics> + 'static) {
+            pub fn relation_def(&self) -> #crate_name::RelationDef {
                 match self {
-                    #(#variant_refs,)*
+                    #(#variant_match_arms),*
                 }
-            }
-        }
-
-        #[automatically_derived]
-        impl #impl_generics #crate_name::RelationType for #ident #type_generics #where_clause {
-            fn relation_via(&self) -> &str {
-                self.as_relation().def_owned().relation_name()
-            }
-
-            fn relation_from(&self) -> String {
-                self.as_relation().def_owned().relation_from().to_string()
-            }
-
-            fn relation_to(&self) -> String {
-                self.as_relation().def_owned().relation_to().to_string()
             }
         }
 
@@ -160,7 +147,6 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
     };
 
     Ok(quote! {
-        #(#variant_impls)*
         #trait_impls
     })
 }

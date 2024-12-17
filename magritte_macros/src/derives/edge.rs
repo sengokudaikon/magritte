@@ -155,7 +155,7 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
         inventory::submit! {
             #crate_name::EdgeRegistration {
-                builder: || #crate_name::edge_snapshot::<#ident #type_generics>()
+                builder: || #crate_name::edge_snapshot::<#ident #type_generics>(),
             }
         }
     })

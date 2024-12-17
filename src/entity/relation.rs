@@ -2,7 +2,7 @@ use crate::{EdgeTrait, TableTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use magritte_query::types::RelationType;
-use magritte_query::{HasId, Query, RelateStatement, SelectStatement, SurrealId};
+use magritte_query::{GraphTraversal, HasId, Query, RelateStatement, SelectStatement, SurrealId};
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,37 +27,28 @@ pub trait RelationTrait: RelationType {
     type Source: TableTrait; // The Table that owns this relation
     type Edge: EdgeTrait + HasId; // The edge type for this relation
     type Target: TableTrait + HasId; // The target table type for this relation
-
     /// Get the relation definition
-    fn def() -> RelationDef
-    where
-        Self: Sized;
+    fn def() -> RelationDef;
 
     fn def_owned(&self) -> RelationDef {
         Self::def()
     }
 
     /// Create a relate statement for this relation
-    fn to_statement(&self) -> Result<RelateStatement> {
+    fn relate_ids(from_id: &str, to_id: &str) -> Result<RelateStatement> {
         let def = Self::def();
+        let from_record = format!("{}:{}", def.relation_from(), from_id);
+        let to_record = format!("{}:{}", def.relation_to(), to_id);
+
         let mut stmt = Query::relate()
-            .from_record(&def.from)
-            .to_record(&def.to)
+            .from_record(&from_record)
+            .to_record(&to_record)
             .edge_table(&def.via);
 
-        if let Some(content) = def.content {
+        if let Some(content) = def.content() {
             stmt = stmt.content(content).map_err(anyhow::Error::from)?;
         }
         Ok(stmt)
-    }
-
-    /// Build a query to load related entities
-    fn build_load_query(entity_id: &str) -> SelectStatement<Self::Target> {
-        Query::select()
-            .field("*", None)
-            .relation_wildcard_as("related")
-            .fetch(&["related"])
-            .where_id(SurrealId::<Self::Target>::from(entity_id))
     }
 
     /// Check if this relation should be loaded eagerly
@@ -98,4 +89,11 @@ impl RelationDef {
     pub fn load_strategy(&self) -> LoadStrategy {
         self.load_strategy.unwrap_or(LoadStrategy::Default)
     }
+}
+
+#[macro_export]
+macro_rules! relate {
+    ($relation:ty, $from_id:expr, $to_id:expr) => {{
+        <$relation as RelationTrait>::relate_ids($from_id, $to_id)?
+    }};
 }

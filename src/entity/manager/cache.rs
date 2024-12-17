@@ -1,18 +1,24 @@
+use crate::RelationDef;
+use anyhow::{anyhow, Result};
 use moka::future::Cache;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::OnceCell;
-use magritte_query::RecordType;
-use anyhow::Result;
-use crate::RelationDef;
 
 type EntityKey = String;
-type RelationKey = (String, String, String); // (from, to, via)
+// (from_table, via_edge, to_table)
+type RelationKey = (String, String, String);
 
 pub struct EntityCache {
     entities: Cache<EntityKey, Arc<Value>>,
     relations: Cache<RelationKey, Vec<String>>,
+}
+
+impl Default for EntityCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EntityCache {
@@ -58,32 +64,60 @@ impl EntityCache {
     }
 
     /// Cache the related entity IDs for a given relation.
-    /// Uses the actual relation metadata to form a stable key.
+    /// The key is (from_record, via_edge, to_record) where:
+    /// - from_record is the full record identifier (table:id)
+    /// - via_edge is the edge type
+    /// - to_record is the full record identifier (table:id)
     pub async fn cache_relation_ids(
         &self,
         def: &RelationDef,
-        related_ids: Vec<String>,
+        source_id: String,
+        relation_ids: Vec<String>,
     ) -> Result<()> {
         let key = (
-            def.relation_from().to_string(),
+            format!("{}:{}", def.relation_from(), source_id),
+            def.via.clone(),
             def.relation_to().to_string(),
-            def.relation_name().to_string(),
         );
-        self.relations.insert(key, related_ids).await;
+        let existing = self.relations.get(&key).await;
+        if let Some(mut existing) = existing {
+            existing.extend(relation_ids);
+            self.relations.insert(key, existing).await;
+        } else {
+            self.relations.insert(key, relation_ids).await;
+        }
         Ok(())
     }
 
     /// Retrieve cached related entity IDs for a given relation.
-    pub async fn get_related_ids(
-        &self,
-        def: &RelationDef,
-    ) -> Result<Option<Vec<String>>> {
+    pub async fn get_related_ids(&self, def: &RelationDef) -> Result<Option<Vec<String>>> {
         let key = (
-            def.relation_from().to_string(),
-            def.relation_to().to_string(),
-            def.relation_name().to_string(),
+            def.relation_from().to_string(), // Already contains table:id
+            def.via.clone(),
+            def.relation_to().to_string(), // Already contains table:id
         );
-        Ok(self.relations.get(&key).await.map(|ids| ids.clone()))
+        Ok(self.relations.get(&key).await)
+    }
+
+    /// Get all relations for a given source record
+    pub async fn get_relations_for_source(
+        &self,
+        source_record: &str, // Full record identifier (table:id)
+    ) -> Result<Vec<(String, String, Vec<String>)>> {
+        // (edge_type, target_record, related_ids)
+        let mut result = Vec::new();
+
+        // Scan through relations to find all that match the source record
+        for (key, relations) in self.relations.iter() {
+            if key.0 == source_record {
+                if let Some(ids) = self.relations.get(&key).await {
+                    // Return (edge_type, target_record, related_ids)
+                    result.push((key.1.clone(), key.2.clone(), ids.clone()));
+                }
+            }
+        }
+
+        Ok(result)
     }
 
     pub async fn clear(&self) {

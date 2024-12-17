@@ -189,12 +189,8 @@ impl ToTokens for Edge {
 pub struct Relate {
     #[deluxe(default)]
     pub from: Option<Path>,
-    #[deluxe(default, rename = in)]
-    pub in_id: Option<String>,
     #[deluxe(default)]
     pub to: Option<Path>,
-    #[deluxe(default, rename = out)]
-    pub out_id: Option<String>,
     #[deluxe(default)]
     pub edge: Option<Path>,
     #[deluxe(default)]
@@ -207,9 +203,7 @@ impl ToTokens for Relate {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Relate {
             from,
-            in_id,
             to,
-            out_id,
             edge,
             content,
             eager,
@@ -217,9 +211,7 @@ impl ToTokens for Relate {
         let expanded = quote! {
             Relate {
                 from: #from
-                in_id: #in_id,
                 to: #to,
-                out_id: #out_id,
                 edge: #edge,
                 content: #content,
                 eager: #eager

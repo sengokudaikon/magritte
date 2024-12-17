@@ -155,9 +155,14 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     
     Ok(quote! {
         impl #impl_generics #crate_name::HasColumns for #entity_type #type_generics #where_clause {
-            fn columns() -> impl Iterator<Item = #column_enum_name #type_generics> {
+            fn columns() -> Vec<#column_enum_name #type_generics> {
                 use strum::IntoEnumIterator;
-                #column_enum_name::iter()
+                #column_enum_name::iter().collect::<Vec<_>>()
+            }
+
+            fn column_defs() -> Vec<#crate_name::ColumnDef> {
+                use strum::IntoEnumIterator;
+                #column_enum_name::iter().map(|r| r.def()).collect()
             }
         }
 

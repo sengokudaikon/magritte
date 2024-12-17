@@ -1,5 +1,7 @@
 use crate::types::ReturnType;
 
+
+
 pub trait Returns {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType>;
     fn return_(mut self, return_type: ReturnType) -> Self

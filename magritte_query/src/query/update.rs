@@ -3,10 +3,7 @@
 //! This module contains operations related to updating existing records in
 //! tables.
 
-use crate::{
-    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns,
-    SqlValue, SurrealDB, SurrealId,
-};
+use crate::{CreateStatement, FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue, SurrealDB, SurrealId};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
@@ -15,6 +12,7 @@ use serde_json::Value;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tracing::{error, info, instrument};
+use crate::transaction::Transactional;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Content {
@@ -30,15 +28,16 @@ pub struct UpdateStatement<T>
 where
     T: RecordType,
 {
-    pub(crate) targets: Option<Vec<FromTarget<T>>>,
-    pub(crate) with_id: Option<SurrealId<T>>,
-    pub(crate) only: bool,
-    pub(crate) content: Option<Content>,
-    pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
-    pub(crate) parameters: Vec<(String, serde_json::Value)>,
-    pub(crate) parallel: bool,
-    pub(crate) timeout: Option<Duration>,
-    pub(crate) return_type: Option<ReturnType>,
+    targets: Option<Vec<FromTarget<T>>>,
+    with_id: Option<SurrealId<T>>,
+    only: bool,
+    content: Option<Content>,
+    conditions: Vec<(String, Operator, SqlValue)>,
+    parameters: Vec<(String, serde_json::Value)>,
+    parallel: bool,
+    timeout: Option<Duration>,
+    return_type: Option<ReturnType>,
+    in_transaction: bool,
     _marker: PhantomData<T>,
 }
 
@@ -47,7 +46,7 @@ where
     T: RecordType,
 {
     #[instrument(skip_all)]
-    pub fn content<C: Serialize>(mut self, content: C) -> anyhow::Result<Self> {
+    pub fn content<C: Serialize>(mut self, content: &C) -> anyhow::Result<Self> {
         self.content = Some(Content::Content(serde_json::to_value(content)?));
         Ok(self)
     }
@@ -85,7 +84,7 @@ where
         self
     }
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             targets: None,
             with_id: None,
@@ -96,11 +95,12 @@ where
             parallel: false,
             timeout: None,
             return_type: Default::default(),
+            in_transaction: false,
             _marker: PhantomData,
         }
     }
 
-    pub(crate) fn build(&self) -> Result<String> {
+    pub fn build(&self) -> Result<String> {
         let mut query = String::new();
         query.push_str("UPDATE ");
         if self.only {
@@ -198,7 +198,7 @@ where
         Ok(query)
     }
 
-    async fn execute(self, conn: SurrealDB) -> Result<Vec<T>> {
+    pub async fn execute(self, conn: SurrealDB) -> Result<Vec<T>> {
         let query = self.build()?;
         info!("Executing query: {}", query);
 
@@ -247,5 +247,17 @@ where
 {
     fn conditions_mut(&mut self) -> &mut Vec<(String, Operator, SqlValue)> {
         &mut self.conditions
+    }
+}
+impl<T> Transactional for UpdateStatement<T>
+where
+    T: RecordType,
+{
+    fn is_transaction(&self) -> bool {
+        self.in_transaction
+    }
+
+    fn in_transaction(&mut self) -> &mut bool {
+        &mut self.in_transaction
     }
 }

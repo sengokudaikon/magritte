@@ -25,7 +25,7 @@ impl Manager {
         }
     }
 
-    async fn auth(&self, db: &Surreal<Any>) -> Result<()> {
+    async fn auth(&self, db: &Surreal<Any>) -> std::result::Result<(), surrealdb::Error> {
         match &self.creds {
             Credentials::Root { user, pass } => {
                 db.signin(auth::Root {
@@ -62,13 +62,13 @@ impl Manager {
     }
 }
 
-#[async_trait::async_trait]
 impl managed::Manager for Manager {
-    type Error = surrealdb::Error;
     type Type = Arc<Surreal<Any>>;
+    type Error = surrealdb::Error;
 
-    async fn create(&self) -> Result<Self::Type> {
+    async fn create(&self) -> std::result::Result<Self::Type, Self::Error> {
         let db = any::connect(self.host.as_str()).await?;
+        db.use_ns(self.ns.clone()).use_db(self.db.clone()).await?;
         self.auth(&db).await?;
         Ok(Arc::new(db))
     }
@@ -78,11 +78,8 @@ impl managed::Manager for Manager {
         conn: &mut Self::Type,
         _: &managed::Metrics,
     ) -> managed::RecycleResult<Self::Error> {
-        // Re-authenticate
-        self.auth(conn).await.map_err(|e| managed::RecycleError::from(e));
-
-        // Perform a health check query
-        // `INFO FOR DB;` is a simple SurrealDB statement that should return info about the current DB
+        conn.use_ns(self.ns.clone()).use_db(self.db.clone()).await?;
+        self.auth(conn).await?;
         let _ = conn.query("INFO FOR DB;").await?;
         Ok(())
     }

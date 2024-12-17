@@ -101,9 +101,7 @@ impl SurrealConnectionManagerBuilder {
             .await
             .map_err(|e| Error::Generic(format!("Failed to get connection: {}", e)))?;
         // Health check: we already do this in recycle, but let's do a one-time check here too.
-        conn.query("INFO FOR DB;")
-            .await
-            .map_err(|e| Error::Surreal(e))?;
+        conn.query("INFO FOR DB;").await.map_err(Error::Surreal)?;
 
         Ok(SurrealConnectionManager { pool })
     }

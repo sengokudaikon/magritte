@@ -5,6 +5,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display};
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
+use strum::IntoEnumIterator;
 
 pub mod order;
 pub mod return_type;
@@ -29,7 +31,7 @@ pub use return_type::*;
 pub use schema::*;
 pub use schema::SchemaType;
 pub use field_type::*;
-pub trait NamedType: Sized {
+pub trait NamedType {
     fn table_name() -> &'static str;
 }
 
@@ -101,8 +103,10 @@ pub trait IndexType:
     fn table_name() -> &'static str;
 }
 
-pub trait RelationType: Clone + Send + Sync + Copy + strum::IntoEnumIterator + 'static {
-    fn relation_via() -> &'static str;
+pub trait Relations: Clone + Copy + Send + Sync + IntoEnumIterator + 'static{}
+
+pub trait RelationType: Clone + Send + Sync + 'static {
+    fn relation_via() -> String;
     fn relation_from() -> String;
     fn relation_to() -> String;
 }
@@ -123,6 +127,7 @@ pub trait ColumnTypeLite:
 {
 }
 
+pub type Record = Arc<dyn RecordType>;
 #[cfg(feature = "uuid")]
 pub mod uuid;
 mod field_type;

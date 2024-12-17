@@ -11,6 +11,8 @@ pub mod types;
 pub mod value;
 pub mod vector_search;
 pub mod wheres;
+pub mod transaction;
+
 pub use conditions::*;
 pub use expr::*;
 pub use from::*;

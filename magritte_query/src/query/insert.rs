@@ -6,12 +6,13 @@ use std::fmt::{Debug, Display};
 use std::process::id;
 use std::time::Duration;
 
-use crate::{FromTarget,RecordType, ReturnType, SurrealDB, SurrealId};
+use crate::{CreateStatement, FromTarget, RecordType, ReturnType, SurrealDB, SurrealId};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::Serialize;
 use surrealdb::sql::Value;
 use tracing::{error, info, instrument};
+use crate::transaction::Transactional;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -26,17 +27,18 @@ pub struct InsertStatement<T>
 where
     T: RecordType,
 {
-    pub(crate) targets: Option<Vec<FromTarget<T>>>,
-    pub(crate) with_id: Option<SurrealId<T>>,
-    pub(crate) only: bool,
-    pub(crate) content: Option<Content>,
-    pub(crate) parameters: Vec<(String, serde_json::Value)>,
-    pub(crate) parallel: bool,
-    pub(crate) timeout: Option<Duration>,
-    pub(crate) return_type: Option<ReturnType>,
-    pub(crate) as_relation: bool,
-    pub(crate) ignore: bool,
-    phantom: std::marker::PhantomData<T>,
+    targets: Option<Vec<FromTarget<T>>>,
+    with_id: Option<SurrealId<T>>,
+    only: bool,
+    content: Option<Content>,
+    parameters: Vec<(String, serde_json::Value)>,
+    parallel: bool,
+    timeout: Option<Duration>,
+    return_type: Option<ReturnType>,
+    as_relation: bool,
+    ignore: bool,
+    in_transaction: bool,
+    _marker: std::marker::PhantomData<T>,
 }
 
 impl<T> InsertStatement<T>
@@ -47,7 +49,7 @@ where
         self.with_id = Some(id);
         self
     }
-    pub fn content(mut self, content: T) -> Result<Self> {
+    pub fn content(mut self, content: &T) -> Result<Self> {
         self.content = Some(Content::Value(serde_json::to_value(content)?));
         Ok(self)
     }
@@ -132,7 +134,7 @@ where
         self.parallel = true;
         self
     }
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             targets: None,
             with_id: None,
@@ -144,7 +146,8 @@ where
             return_type: Default::default(),
             as_relation: false,
             ignore: false,
-            phantom: std::marker::PhantomData,
+            in_transaction: false,
+            _marker: std::marker::PhantomData,
         }
     }
 
@@ -172,7 +175,6 @@ where
             query.push_str("IGNORE ");
         }
 
-
         if let Some(content) = &self.content {
             match content {
                 Content::Value(value) => {
@@ -181,23 +183,48 @@ where
                 }
                 Content::Set(sets) => {
                     query.push_str(" (");
-                    query.push_str(&sets.iter().map(|(field, _)| field.strip_prefix("\"").unwrap().strip_suffix("\"").unwrap()).collect::<Vec<_>>().join(", "));
+                    query.push_str(
+                        &sets
+                            .iter()
+                            .map(|(field, _)| {
+                                field
+                                    .strip_prefix("\"")
+                                    .unwrap()
+                                    .strip_suffix("\"")
+                                    .unwrap()
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    );
                     query.push_str(") VALUES (");
-                    query.push_str(&sets.iter().map(|(field, value)|{
-                        if field == "id" {
-                            strip_id(value).unwrap_or_else(|_| serde_json::to_string(value).unwrap())
-                        } else {
-                            serde_json::to_string(value).unwrap()
-                        }
-                    }).collect::<Vec<_>>().join(", "));
+                    query.push_str(
+                        &sets
+                            .iter()
+                            .map(|(field, value)| {
+                                if field == "id" {
+                                    strip_id(value)
+                                        .unwrap_or_else(|_| serde_json::to_string(value).unwrap())
+                                } else {
+                                    serde_json::to_string(value).unwrap()
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    );
                     query.push_str(")");
 
                     // Add ON DUPLICATE KEY UPDATE if present
                     if !sets.is_empty() {
                         query.push_str(" ON DUPLICATE KEY UPDATE ");
-                        query.push_str(&sets.iter().map(|(field, value)| {
-                            format!("{} = {}", field, serde_json::to_string(value).unwrap())
-                        }).collect::<Vec<_>>().join(", "));
+                        query.push_str(
+                            &sets
+                                .iter()
+                                .map(|(field, value)| {
+                                    format!("{} = {}", field, serde_json::to_string(value).unwrap())
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        );
                     }
                 }
             }
@@ -243,10 +270,7 @@ where
 
         let res = surreal_query.await?.take(0);
         match res {
-            Ok(res) => {
-
-                Ok(res)
-            },
+            Ok(res) => Ok(res),
             Err(e) => {
                 error!("Query execution failed: {:?}", e);
                 Err(anyhow!(e))
@@ -269,7 +293,7 @@ fn unquote_keys(value: &serde_json::Value) -> Result<String> {
                                 }
                             }
                             Err(anyhow!("Invalid id format"))
-                        },
+                        }
                         (_, v) => value_to_string(v),
                     }?;
                     Ok(format!("{}: {}", k, value_str))
@@ -306,7 +330,7 @@ fn strip_id(value: &serde_json::Value) -> Result<String> {
     }
     Err(anyhow!("Invalid id format"))
 }
-fn process_value( value: &serde_json::Value) -> Result<String> {
+fn process_value(value: &serde_json::Value) -> Result<String> {
     match value {
         serde_json::Value::Object(map) => {
             let entries: Vec<String> = map
@@ -323,5 +347,17 @@ fn process_value( value: &serde_json::Value) -> Result<String> {
             Ok(format!("{{{}}}", entries.join(", ")))
         }
         _ => Err(anyhow!("Expected an object for INSERT")),
+    }
+}
+impl<T> Transactional for InsertStatement<T>
+where
+    T: RecordType,
+{
+    fn is_transaction(&self) -> bool {
+        self.in_transaction
+    }
+
+    fn in_transaction(&mut self) -> &mut bool {
+        &mut self.in_transaction
     }
 }

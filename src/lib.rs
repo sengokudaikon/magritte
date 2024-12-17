@@ -1,6 +1,7 @@
 #![feature(duration_constructors)]
 #![feature(min_specialization)]
 #![feature(associated_type_defaults)]
+#![feature(const_type_id)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
 //! magritte - A powerful QueryBuilder for SurrealDB
@@ -9,13 +10,18 @@
 //! This crate provides a type-safe query
 //! builder for SurrealDB with enhanced schema support.
 
+extern crate core;
+
+mod database;
 mod defs;
 pub mod entity;
 pub mod entity_crud;
 mod snapshot;
-mod database;
 
+pub use entity::manager::registry::EntityProxyRegistration;
+pub use entity::relation::LoadStrategy;
 use serde::{Deserialize, Serialize};
+use std::any::TypeId;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -105,10 +111,12 @@ pub use magritte_query::*;
 pub use strum;
 pub use surrealdb::RecordId;
 pub use RecordType;
+#[derive(Clone)]
 pub struct TableRegistration {
     pub builder: fn() -> Result<TableSnapshot>,
 }
 
+#[derive(Clone)]
 pub struct EdgeRegistration {
     pub builder: fn() -> Result<EdgeSnapshot>,
 }
@@ -119,5 +127,6 @@ inventory::collect!(TableRegistration);
 // Global inventory of `EdgeRegistration` entries
 inventory::collect!(EdgeRegistration);
 
+use crate::entity_crud::SurrealCrud;
 #[cfg(feature = "uuid")]
 pub use magritte_query::uuid::*;

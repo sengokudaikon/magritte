@@ -6,32 +6,31 @@ use std::fmt::{Debug, Display};
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use crate::{
-    FromTarget, HasConditions, HasParams, Operator,  RangeTarget, RecordType,
-    ReturnType, Returns, SqlValue, SurrealDB, SurrealId, WhereClause,
-};
+use crate::{CreateStatement, FromTarget, HasConditions, HasParams, Operator, RangeTarget, RecordType, ReturnType, Returns, SqlValue, SurrealDB, SurrealId, WhereClause};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use tracing::{error, info, instrument};
+use crate::transaction::Transactional;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeleteStatement<T>
 where
     T: RecordType,
 {
-    pub(crate) with_id: Option<SurrealId<T>>,
-    pub(crate) with_range: Option<RangeTarget>,
-    pub(crate) targets: Option<Vec<FromTarget<T>>>,
-    pub(crate) only: bool,
-    pub(crate) conditions: Vec<(String, Operator, SqlValue)>,
-    pub(crate) parameters: Vec<(String, Value)>,
-    pub(crate) timeout: Option<Duration>,
-    pub(crate) parallel: bool,
-    pub(crate) return_type: Option<ReturnType>,
-    phantom: PhantomData<T>,
+    with_id: Option<SurrealId<T>>,
+    with_range: Option<RangeTarget>,
+    targets: Option<Vec<FromTarget<T>>>,
+    only: bool,
+    conditions: Vec<(String, Operator, SqlValue)>,
+    parameters: Vec<(String, Value)>,
+    timeout: Option<Duration>,
+    parallel: bool,
+    return_type: Option<ReturnType>,
+    in_transaction: bool,
+    _marker: PhantomData<T>,
 }
 impl<T> DeleteStatement<T>
 where
@@ -84,7 +83,7 @@ where
     }
 
     #[instrument(skip_all)]
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             with_id: None,
             with_range: None,
@@ -95,11 +94,12 @@ where
             timeout: None,
             parallel: false,
             return_type: Default::default(),
-            phantom: Default::default(),
+            in_transaction: false,
+            _marker: Default::default(),
         }
     }
     #[instrument(skip(self))]
-    pub(crate) fn build(&self) -> anyhow::Result<String> {
+    pub fn build(&self) -> anyhow::Result<String> {
         let mut query = String::new();
         query.push_str("DELETE ");
         if self.only {
@@ -166,7 +166,7 @@ where
         Ok(query)
     }
     #[instrument(skip_all)]
-    async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<T>> {
+    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<T>> {
         let query = self.build()?;
         info!("Executing query: {}", query);
 
@@ -331,5 +331,18 @@ where
 
         query.push(';');
         Ok(query)
+    }
+}
+
+impl<T> Transactional for DeleteStatement<T>
+where
+    T: RecordType,
+{
+    fn is_transaction(&self) -> bool {
+        self.in_transaction
+    }
+
+    fn in_transaction(&mut self) -> &mut bool {
+        &mut self.in_transaction
     }
 }
