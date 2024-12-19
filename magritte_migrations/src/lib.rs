@@ -11,7 +11,7 @@ pub mod snapshot;
 pub mod table;
 pub mod test_models;
 pub mod types;
-
+pub mod introspection;
 pub(crate) fn ensure_overwrite(stmt: &str) -> String {
     let stmt = stmt.trim();
     if stmt.contains("IF NOT EXISTS") {

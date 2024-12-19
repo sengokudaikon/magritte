@@ -224,6 +224,11 @@ where
         if let Some(comment) = &self.comment {
             stmt.push_str(&format!(" COMMENT \"{}\"", comment));
         }
+
+        if self.enforced {
+            stmt.push_str(" ENFORCED");
+        }
+
         stmt.push(';');
         Ok(stmt)
     }

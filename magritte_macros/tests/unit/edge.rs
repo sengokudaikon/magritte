@@ -8,7 +8,7 @@ use super::Product;
 
 // Test edge between Order and Product
 #[derive(Edge, Serialize, Deserialize,  Clone)]
-#[edge(name = "order_product", from = Order, to = Product, schema = "SCHEMALESS", enforced = true)]
+#[edge(name = "order_product", from = Order, to = Product, schema = "SCHEMALESS", enforced)]
 pub struct OrderProduct {
     id: SurrealId<Self>,
     #[column(type = "datetime")]
@@ -88,11 +88,12 @@ fn test_user_order_edge_derive() {
 fn test_edge_statements() -> Result<()> {
     // Test OrderProductEdge statement
     let order_product_edge_stmt = OrderProduct::new().to_statement_owned().build()?;
-    assert!(order_product_edge_stmt.contains("DEFINE TABLE order_product SCHEMALESS TYPE RELATION FROM orders TO products ENFORCED"));
+    println!("{}", order_product_edge_stmt);
+    assert!(order_product_edge_stmt.contains("DEFINE TABLE order_product TYPE RELATION SCHEMALESS FROM orders TO products ENFORCED"));
 
     // Test UserOrderEdge statement
     let user_order_edge_stmt = UserOrder::new().to_statement_owned().build()?;
-    assert!(user_order_edge_stmt.contains("DEFINE TABLE IF NOT EXISTS user_order SCHEMAFULL TYPE RELATION FROM users TO orders"));
+    assert!(user_order_edge_stmt.contains("DEFINE TABLE IF NOT EXISTS user_order TYPE RELATION SCHEMAFULL FROM users TO orders"));
     Ok(())
 }
 
