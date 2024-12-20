@@ -1,4 +1,4 @@
-use magritte::{HasId, SurrealDB, SurrealId, Table};
+use magritte::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
@@ -150,6 +150,15 @@ impl HasId for MigrationRecord {
     fn id(&self) -> SurrealId<Self> {
         self.id.clone()
     }
+}
+
+#[derive(Index, strum::EnumIter, Serialize, Deserialize)]
+pub enum MigrationRecordIndexes {
+
+}
+#[derive(Event, strum::EnumIter, Serialize, Deserialize)]
+pub enum MigrationRecordEvents {
+
 }
 impl MigrationRecord {
     pub fn new(

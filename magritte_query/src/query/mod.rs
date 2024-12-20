@@ -94,6 +94,10 @@ impl Query {
         UpsertStatement::new()
     }
 
+    pub fn info(db: SurrealDB) -> InfoStatement {
+        InfoStatement::new(db)
+    }
+
     /// Begin a transaction
     pub fn begin() -> TransactionStatement {
         TransactionStatement::new()
@@ -114,6 +118,11 @@ impl TransactionStatement {
 
     pub fn then<S: StatementBuilder>(mut self, statement: S) -> Self {
         self.statements.push(statement.build().unwrap());
+        self
+    }
+
+    pub fn raw(mut self, statement: String) -> Self {
+        self.statements.push(statement);
         self
     }
 

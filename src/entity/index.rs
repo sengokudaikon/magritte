@@ -90,8 +90,13 @@ impl IndexDef {
         self.comment.as_deref()
     }
     pub fn to_statement(&self) -> DefineIndexStatement {
-        let mut def = Define::index()
-            .name(self.name.clone())
+        let mut def = Define::index();
+
+        if self.name == "".to_string() {
+            return def;
+        }
+
+        def = def.name(self.name.clone())
             .table(self.table.clone());
 
         if self.overwrite {

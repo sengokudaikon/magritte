@@ -1,6 +1,7 @@
 use crate::{ColumnTrait, EdgeTrait, EventTrait, HasEvents, HasIndexes, IndexTrait, TableTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::event;
 
 // Basic table snapshot structure, can be extended as needed
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,6 +13,41 @@ pub struct TableSnapshot {
     pub events: HashMap<String, String>,
 }
 
+impl Default for TableSnapshot {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            define_table_statement: String::new(),
+            fields: HashMap::new(),
+            indexes: HashMap::new(),
+            events: HashMap::new(),
+        }
+    }
+}
+impl TableSnapshot {
+    pub fn new(name: String, define_table_statement: String) -> Self {
+        Self {
+            name,
+            define_table_statement,
+            fields: HashMap::new(),
+            indexes: HashMap::new(),
+            events: HashMap::new(),
+        }
+    }
+
+    pub fn add_field(&mut self, field_name: String, field: String) {
+        self.fields.insert(field_name, field);
+    }
+
+    pub fn add_index(&mut self, index_name: String, index: String) {
+        self.indexes.insert(index_name, index);
+    }
+
+    pub fn add_event(&mut self, event_name: String, event: String) {
+        self.events.insert(event_name, event);
+    }
+}
+
 // An edge snapshot, similar to tables but for edges.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EdgeSnapshot {
@@ -20,6 +56,41 @@ pub struct EdgeSnapshot {
     pub fields: HashMap<String, String>,
     pub indexes: HashMap<String, String>,
     pub events: HashMap<String, String>,
+}
+impl Default for EdgeSnapshot {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            define_edge_statement: String::new(),
+            fields: HashMap::new(),
+            indexes: HashMap::new(),
+            events: HashMap::new(),
+        }
+    }
+}
+impl EdgeSnapshot {
+    pub fn new(name: String, define_edge_statement: String) -> Self {
+        Self {
+            name,
+            define_edge_statement,
+            fields: HashMap::new(),
+            indexes: HashMap::new(),
+            events: HashMap::new(),
+        }
+    }
+
+
+    pub fn add_field(&mut self, field_name: String, field: String) {
+        self.fields.insert(field_name, field);
+    }
+
+    pub fn add_index(&mut self, index_name: String, index: String) {
+        self.indexes.insert(index_name, index);
+    }
+
+    pub fn add_event(&mut self, event_name: String, event: String) {
+        self.events.insert(event_name, event);
+    }
 }
 
 // Full database schema snapshot
@@ -110,7 +181,7 @@ where
 }
 
 /// Build a full `SchemaSnapshot` from code. If you have multiple tables, you might call this multiple times for each table type, or have a registry of tables.
-pub fn tables_edges_snapshot<T, E>() -> anyhow::Result<SchemaSnapshot>
+pub fn full_snapshot<T, E>() -> anyhow::Result<SchemaSnapshot>
 where
     T: TableTrait,
     E: EdgeTrait,
@@ -123,61 +194,6 @@ where
     Ok(schema)
 }
 
-pub fn with_events<T>(mut table_snap: TableSnapshot) -> anyhow::Result<TableSnapshot>
-where
-    T: TableTrait + HasEvents
-{
-    for evt in <T as HasEvents>::events() {
-        let def = EventTrait::def(&evt);
-        let evt_def = EventTrait::to_statement(&evt)?
-            .build()
-            .map_err(anyhow::Error::from)?;
-        table_snap.events.insert(def.event_name().to_string(), evt_def);
-    }
-    Ok(table_snap)
-}
-
-pub fn with_indexes<T>(mut table_snap: TableSnapshot) -> anyhow::Result<TableSnapshot>
-where
-    T: TableTrait + HasIndexes
-{
-    for idx in <T as HasIndexes>::indexes() {
-        let def = IndexTrait::def(&idx);
-        let idx_def = IndexTrait::to_statement(&idx)
-            .build()
-            .map_err(anyhow::Error::from)?;
-        table_snap.indexes.insert(def.index_name().to_string(), idx_def);
-    }
-    Ok(table_snap)
-}
-
-pub fn with_edge_events<E>(mut edge_snap: EdgeSnapshot) -> anyhow::Result<EdgeSnapshot>
-where
-    E: EdgeTrait + HasEvents
-{
-    for evt in <E as HasEvents>::events() {
-        let def = EventTrait::def(&evt);
-        let evt_def = EventTrait::to_statement(&evt)?
-            .build()
-            .map_err(anyhow::Error::from)?;
-        edge_snap.events.insert(def.event_name().to_string(), evt_def);
-    }
-    Ok(edge_snap)
-}
-
-pub fn with_edge_indexes<E>(mut edge_snap: EdgeSnapshot) -> anyhow::Result<EdgeSnapshot>
-where
-    E: EdgeTrait + HasIndexes
-{
-    for idx in <E as HasIndexes>::indexes() {
-        let def = IndexTrait::def(&idx);
-        let idx_def = IndexTrait::to_statement(&idx)
-            .build()
-            .map_err(anyhow::Error::from)?;
-        edge_snap.indexes.insert(def.index_name().to_string(), idx_def);
-    }
-    Ok(edge_snap)
-}
 pub fn empty_schema() -> SchemaSnapshot {
     SchemaSnapshot::new()
 }

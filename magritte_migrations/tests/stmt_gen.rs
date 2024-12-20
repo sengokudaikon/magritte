@@ -1,8 +1,5 @@
-use magritte::{
-    table_snapshot, ColumnTrait, HasId, SchemaSnapshot, SurrealId, Table, TableRegistration,
-    TableSnapshot, TableTrait,
-};
-use magritte_migrations::generate_diff_migration;
+#![feature(const_type_id)]
+use magritte::{table_snapshot, ColumnTrait, Event, HasId, Index, SchemaSnapshot, SurrealId, Table, TableRegistration, TableSnapshot, TableTrait};
 use magritte_migrations::manager::MigrationManager;
 use magritte_migrations::table::TableDiff;
 use magritte_migrations::test_models::{UserV1, UserV2};
@@ -60,7 +57,7 @@ async fn test_generate_diff_from_snapshots() -> anyhow::Result<()> {
     };
 
     // 3. Generate the diff migration
-    let statements = generate_diff_migration(&old_schema, &new_schema)?;
+    let statements =  MigrationManager::generate_diff_migration(&old_schema, &new_schema)?;
     println!("{}", statements.join("\n"));
     assert!(
         !statements.is_empty(),
@@ -204,7 +201,7 @@ async fn test_inventory_registration_and_migration() -> anyhow::Result<()> {
     assert_eq!(new_schema.tables.len(), 1, "Should have one table (UserV2)");
 
     // Generate diff
-    let diff_statements = generate_diff_migration(&old_schema, &new_schema)?;
+    let diff_statements = MigrationManager::generate_diff_migration(&old_schema, &new_schema)?;
     assert!(!diff_statements.is_empty(), "Expected diff statements");
     // Check that a new field (email) is introduced
     let email_field = diff_statements.iter().any(|s| s.contains("email"));
@@ -240,7 +237,7 @@ async fn test_reverse_migration_from_inventory() -> anyhow::Result<()> {
     let new_schema = schema_with_user_v2()?;
 
     // Generate diff and reverse statements
-    let diff_statements = generate_diff_migration(&old_schema, &new_schema)?;
+    let diff_statements =  MigrationManager::generate_diff_migration(&old_schema, &new_schema)?;
     assert!(
         !diff_statements.is_empty(),
         "Expected up migration statements"
@@ -268,12 +265,75 @@ async fn test_reverse_migration_from_inventory() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn test_conditional_features() -> anyhow::Result<()> {
+    
+    // Get schema with all models
+    let schema =  MigrationManager::current_schema_from_code()?;
+    
+    // Test OrderV1 (has indexes)
+    let order_snap = schema.tables.get("orders").expect("Order table not found");
+    assert!(!order_snap.indexes.is_empty(), "Order should have indexes");
+    assert!(order_snap.events.is_empty(), "Order should not have events");
+    
+    // Test ProductV1 (has events)
+    let product_snap = schema.tables.get("products").expect("Product table not found");
+    assert!(product_snap.indexes.is_empty(), "Product should not have indexes");
+    assert!(!product_snap.events.is_empty(), "Product should have events");
+    
+    // Verify index content
+    let order_indexes = order_snap.indexes.keys().collect::<Vec<_>>();
+    assert!(order_indexes.contains(&&"unique_order_id".to_string()), "Missing expected index");
+    
+    // Verify event content
+    let product_events = product_snap.events.keys().collect::<Vec<_>>();
+    assert!(product_events.contains(&&"low_stock_alert".to_string()), "Missing expected event");
+    
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_migration_with_features() -> anyhow::Result<()> {
+
+    
+    let old_schema = SchemaSnapshot::new(); // Empty schema
+    let new_schema =  MigrationManager::current_schema_from_code()?;
+    
+    let statements =  MigrationManager::generate_diff_migration(&old_schema, &new_schema)?;
+    
+    // Verify that index and event statements are generated
+    let statements_str = statements.join("\n");
+    assert!(statements_str.contains("DEFINE INDEX"), "Should generate index statements");
+    assert!(statements_str.contains("DEFINE EVENT"), "Should generate event statements");
+    
+    // Verify order of statements (tables should be defined before indexes/events)
+    let table_pos = statements_str.find("DEFINE TABLE").unwrap_or(usize::MAX);
+    let index_pos = statements_str.find("DEFINE INDEX").unwrap_or(usize::MAX);
+    let event_pos = statements_str.find("DEFINE EVENT").unwrap_or(usize::MAX);
+    
+    assert!(table_pos < index_pos, "Tables should be defined before indexes");
+    assert!(table_pos < event_pos, "Tables should be defined before events");
+    
+    Ok(())
+}
+
 #[derive(Clone, Serialize, Deserialize, Table)]
 #[table(name = "test_inventory_table")]
 pub struct TestInventoryTable {
     id: SurrealId<Self>,
     #[column(type = "string")]
     title: String,
+}
+
+#[derive(strum::EnumIter, Serialize, Deserialize, Index)]
+pub enum TestInventoryTableIndexes {
+
+}
+
+#[derive(strum::EnumIter, Serialize, Deserialize, Event)]
+pub enum TestInventoryTableEvents {
+
 }
 
 impl HasId for TestInventoryTable {

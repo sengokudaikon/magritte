@@ -14,11 +14,44 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut attrs = input.attrs.clone();
     let table_attr = Table::extract_attributes(&mut attrs)?;
     let crate_name = get_crate_name(false);
+    
     // Use shared table name resolution
     let table_name = resolve_table_name(&table_attr, ident);
     if table_name == "Dummy" {
         return Ok(quote!());
     }
+
+    // Check for required enums
+    let indexes_ident = syn::Ident::new(&format!("{}Indexes", ident), ident.span());
+    let events_ident = syn::Ident::new(&format!("{}Events", ident), ident.span());
+
+    // Try to find the enums in the current scope
+    let assert_enums = quote::quote_spanned! {ident.span()=>
+        const _: () = {
+            #[allow(dead_code)]
+            const ERROR_MSG: &'static str = concat!(
+                "Table `", stringify!(#ident), "` requires associated enums:\n",
+                "#[derive(Index, Serialize, Deserialize, strum::EnumIter)]\n",
+                "pub enum ", stringify!(#ident), "Indexes {}\n\n",
+                "#[derive(Event, Serialize, Deserialize, strum::EnumIter)]\n",
+                "pub enum ", stringify!(#ident), "Events {}\n",
+                "Even if you don't need indexes or events, these empty enums are required."
+            );
+            
+            // This will fail at compile time if the enums don't exist or don't implement required traits
+            trait AssertEnums {
+                type Indexes: #crate_name::IndexType;
+                type Events: #crate_name::EventType;
+            }
+            
+            // If traits aren't implemented, show the error at compile time
+            impl AssertEnums for #ident {
+                type Indexes = #indexes_ident;
+                type Events = #events_ident;
+            }
+        };
+    };
+
     let table_name_lit = quote!(#table_name);
     let table_name_str = &*table_name;
     let schema_type = table_attr.schema.unwrap_or("SCHEMAFULL".to_string());
@@ -102,7 +135,20 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     // Generate column enum and its implementations
     let column_impl = expand_derive_column(input.clone())?;
 
+    let registration = quote! {
+        inventory::submit! {
+            #crate_name::TableRegistration {
+                builder: || -> anyhow::Result<#crate_name::TableSnapshot> {
+                    #crate_name::table_snapshot::<#ident>()
+                },
+                type_id: std::any::TypeId::of::<#ident>(),
+            }
+        }
+    };
+
     let expanded = quote! {
+        #assert_enums
+
         // Generate the column enum first
         #column_impl
 
@@ -152,11 +198,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
             }
         }
 
-        inventory::submit! {
-            #crate_name::TableRegistration {
-                builder: || #crate_name::table_snapshot::<#ident #type_generics>()
-            }
-        }
+        #registration
 
         // Register for entity proxy generation separately
         inventory::submit! {

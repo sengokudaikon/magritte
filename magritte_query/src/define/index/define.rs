@@ -75,6 +75,9 @@ impl DefineIndexStatement {
 
     pub fn build(&self) -> anyhow::Result<String> {
         let mut stmt = String::new();
+        if self.name.is_none() {
+            return Ok(stmt);
+        }
         stmt.push_str("DEFINE INDEX ");
         if self.overwrite {
             stmt.push_str("OVERWRITE ");
@@ -132,6 +135,9 @@ impl DefineIndexStatement {
 
     pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
         let query = self.build()?;
+        if query.is_empty() {
+            return Ok(vec![]);
+        }
         info!("Executing query: {}", query);
 
         let mut surreal_query = conn.query(query);

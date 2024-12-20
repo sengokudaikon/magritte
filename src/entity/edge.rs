@@ -23,7 +23,7 @@ pub struct EdgeDef {
     pub(crate) comment: Option<String>,
 }
 
-pub trait EdgeTrait: EdgeType + HasColumns  {
+pub trait EdgeTrait: EdgeType + HasColumns {
     type EntityFrom: TableType;
     type EntityTo: TableType;
     fn def() -> EdgeDef;

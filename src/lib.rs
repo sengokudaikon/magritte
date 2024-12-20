@@ -10,13 +10,12 @@
 //! This crate provides a type-safe query
 //! builder for SurrealDB with enhanced schema support.
 
-extern crate core;
-
 mod database;
 mod defs;
 pub mod entity;
 pub mod entity_crud;
-mod snapshot;
+pub mod snapshot;
+pub mod test_util;
 
 pub use entity::manager::registry::EntityProxyRegistration;
 pub use entity::relation::LoadStrategy;
@@ -107,18 +106,51 @@ pub use entity::HasRelations;
 pub use magritte_macros::EnumIter;
 pub use magritte_macros::*;
 pub use magritte_macros::{Column, Edge, Event, Index, Relation, Table};
+pub use magritte_query::types::{EventType, IndexType, RelationType};
 pub use magritte_query::*;
 pub use strum;
 pub use surrealdb::RecordId;
 pub use RecordType;
 #[derive(Clone)]
 pub struct TableRegistration {
-    pub builder: fn() -> Result<TableSnapshot>,
+    pub builder: fn() -> anyhow::Result<TableSnapshot>,
+    pub type_id: TypeId,
 }
 
 #[derive(Clone)]
 pub struct EdgeRegistration {
-    pub builder: fn() -> Result<EdgeSnapshot>,
+    pub builder: fn() -> anyhow::Result<EdgeSnapshot>,
+    pub type_id: TypeId,
+}
+
+#[derive(Clone)]
+pub struct EventRegistration {
+    pub parent_type: TypeId,
+    pub event_defs: Vec<EventDef>,
+}
+
+#[derive(Clone)]
+pub struct IndexRegistration {
+    pub parent_type: TypeId,
+    pub index_defs: Vec<IndexDef>,
+}
+
+impl EventRegistration {
+    pub fn new<T: TableType + 'static>(event_defs: Vec<EventDef>) -> Self {
+        Self {
+            parent_type: TypeId::of::<T>(),
+            event_defs,
+        }
+    }
+}
+
+impl IndexRegistration {
+    pub fn new<T: TableType + 'static>(index_defs: Vec<IndexDef>) -> Self {
+        Self {
+            parent_type: TypeId::of::<T>(),
+            index_defs,
+        }
+    }
 }
 
 // Global inventory of `TableRegistration` entries
@@ -126,6 +158,12 @@ inventory::collect!(TableRegistration);
 
 // Global inventory of `EdgeRegistration` entries
 inventory::collect!(EdgeRegistration);
+
+// Global inventory of `EventRegistration` entries
+inventory::collect!(EventRegistration);
+
+// Global inventory of `IndexRegistration` entries
+inventory::collect!(IndexRegistration);
 
 use crate::entity_crud::SurrealCrud;
 #[cfg(feature = "uuid")]

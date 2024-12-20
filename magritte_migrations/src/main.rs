@@ -1,11 +1,11 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use console::style;
-use magritte_migrations::current_schema_from_code;
 use magritte_migrations::snapshot::{load_from_file, save_to_file};
 use magritte_migrations::types::FlexibleDateTime;
 use magritte_migrations::*;
 use std::path::PathBuf;
+use magritte_migrations::manager::MigrationManager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -88,7 +88,7 @@ pub(crate) async fn init_migrations_dir(path: &PathBuf) -> Result<()> {
 }
 
 pub(crate) async fn save_snapshot(migrations_dir: &PathBuf, name: Option<String>) -> Result<()> {
-    let current_schema = current_schema_from_code()?;
+    let current_schema = MigrationManager::current_schema_from_code()?;
 
     let snapshot_dir = migrations_dir.join("snapshots");
     std::fs::create_dir_all(&snapshot_dir)?;

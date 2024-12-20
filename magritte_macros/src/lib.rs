@@ -141,6 +141,7 @@
 
 #![feature(duration_constructors)]
 #![feature(min_specialization)]
+#![feature(const_type_id)]
 #![allow(unused)]
 extern crate proc_macro;
 mod conversion;

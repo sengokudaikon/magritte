@@ -18,6 +18,15 @@ pub struct ActiveUsers {
     id: SurrealId<Self>,
     name: String,
 }
+
+// Empty indexes for ActiveUsers
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
+pub enum ActiveUsersIndexes {}
+
+// Empty events for ActiveUsers
+#[derive(Event, Serialize, Deserialize, strum::EnumIter)]
+pub enum ActiveUsersEvents {}
+
 impl HasId for ActiveUsers {
     fn id(&self) -> SurrealId<Self> {
         self.id.clone()

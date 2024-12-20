@@ -6,7 +6,7 @@ use std::fmt::{Debug, Display};
 /// Defines an Event for a Table
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventDef {
-    pub(crate) name: String,
+    pub name: String,
     pub(crate) table: String,
     pub(crate) overwrite: bool,
     pub(crate) if_not_exists: bool,
@@ -67,7 +67,9 @@ impl EventDef {
     }
     pub fn to_statement(&self) -> anyhow::Result<DefineEventStatement> {
         let mut def = DefineEventStatement::new();
-
+        if self.name == "".to_string() {
+            return Ok(def);
+        }
         if self.overwrite {
             def = def.overwrite();
         } else if self.if_not_exists {
