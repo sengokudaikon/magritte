@@ -2,6 +2,7 @@
 #![feature(min_specialization)]
 #![feature(associated_type_defaults)]
 #![feature(const_type_id)]
+#![feature(const_trait_impl)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
 //! magritte - A powerful QueryBuilder for SurrealDB
@@ -126,29 +127,29 @@ pub struct EdgeRegistration {
 #[derive(Clone)]
 pub struct EventRegistration {
     pub parent_type: TypeId,
-    pub event_defs: Vec<EventDef>,
+    pub event_defs:  &'static [EventDef],
 }
 
 #[derive(Clone)]
 pub struct IndexRegistration {
     pub parent_type: TypeId,
-    pub index_defs: Vec<IndexDef>,
+    pub index_defs: &'static [IndexDef],
 }
 
 impl EventRegistration {
-    pub fn new<T: TableType + 'static>(event_defs: Vec<EventDef>) -> Self {
+    pub const fn new_static<T: 'static>(events: &'static [EventDef]) -> Self {
         Self {
             parent_type: TypeId::of::<T>(),
-            event_defs,
+            event_defs: events,
         }
     }
 }
 
 impl IndexRegistration {
-    pub fn new<T: TableType + 'static>(index_defs: Vec<IndexDef>) -> Self {
+    pub const fn new_static<T: 'static>(indexes: &'static [IndexDef]) -> Self {
         Self {
             parent_type: TypeId::of::<T>(),
-            index_defs,
+            index_defs: indexes,
         }
     }
 }

@@ -1,11 +1,6 @@
 #![feature(const_type_id)]
 pub use error::Error;
 pub use error::Result;
-use magritte::{
-    HasEvents, HasIndexes
-    ,
-};
-use std::any::Any;
 
 pub mod edge;
 pub mod error;

@@ -121,8 +121,8 @@ impl TransactionStatement {
         self
     }
 
-    pub fn raw(mut self, statement: String) -> Self {
-        self.statements.push(statement);
+    pub fn raw(mut self, statement: &str) -> Self {
+        self.statements.push(statement.into());
         self
     }
 

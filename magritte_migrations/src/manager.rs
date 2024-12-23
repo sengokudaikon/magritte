@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use super::{introspection, snapshot, Error, Result};
 use crate::types::FlexibleDateTime;
-use magritte::{EdgeRegistration, EventRegistration, IndexRegistration, Query, SchemaSnapshot, SurrealDB, TableRegistration};
+use magritte::{EdgeRegistration, EventRegistration, IndexRegistration, Query, SchemaSnapshot, SurrealDB, TableRegistration, TableSnapshot};
 use std::path::PathBuf;
 use crate::edge::EdgeDiff;
 use crate::snapshot::save_to_file;
@@ -24,7 +24,7 @@ impl MigrationManager {
             let mut table_snap = (reg.builder)().map_err(Error::from)?;
             for event_reg in inventory::iter::<EventRegistration> {
                 if event_reg.parent_type == reg.type_id {
-                    for event_def in &event_reg.event_defs {
+                    for event_def in event_reg.event_defs {
                         table_snap.add_event(event_def.event_name().into(), event_def.to_statement()?.build().map_err(anyhow::Error::from)?);
                     }
                 }
@@ -33,7 +33,7 @@ impl MigrationManager {
             // Find any registered indexes for this table
             for index_reg in inventory::iter::<IndexRegistration> {
                 if index_reg.parent_type == reg.type_id {
-                    for index_def in &index_reg.index_defs {
+                    for index_def in index_reg.index_defs {
                         table_snap.add_index(index_def.index_name().into(), index_def.to_statement().to_string());
                     }
                 }
@@ -46,7 +46,7 @@ impl MigrationManager {
             let mut edge_snap = (reg.builder)().map_err(Error::from)?;
             for event_reg in inventory::iter::<EventRegistration> {
                 if event_reg.parent_type == reg.type_id {
-                    for event_def in &event_reg.event_defs {
+                    for event_def in event_reg.event_defs {
                         edge_snap.add_event(event_def.event_name().into(), event_def.to_statement()?.build().map_err(anyhow::Error::from)?);
                     }
                 }
@@ -55,7 +55,7 @@ impl MigrationManager {
             // Find any registered indexes for this table
             for index_reg in inventory::iter::<IndexRegistration> {
                 if index_reg.parent_type == reg.type_id {
-                    for index_def in &index_reg.index_defs {
+                    for index_def in index_reg.index_defs {
                         edge_snap.add_index(index_def.index_name().into(), index_def.to_statement().to_string());
                     }
                 }
@@ -231,7 +231,7 @@ impl MigrationManager {
                 diff.added_events = new_table.events.clone();
                 diff
             };
-            schema.add_table(diff);
+            schema.add_table(diff.to_snapshot()?);
         }
 
         for (edge_name, new_edge) in &code_snapshot.edges {
@@ -245,7 +245,7 @@ impl MigrationManager {
                 diff.added_events = new_edge.events.clone();
                 diff
             };
-            schema.add_edge(diff);
+            schema.add_edge(diff.to_snapshot()?);
         }
 
         Ok(schema)
@@ -265,7 +265,7 @@ impl MigrationManager {
         let statements = Self::generate_diff_migration(&stored_snapshot, &validated_snapshot)?;
         let mut transaction = Query::begin();
         for stmt in statements {
-            transaction = transaction.raw(stmt);
+            transaction = transaction.raw(&stmt);
         }
         transaction.commit().execute(db).await.map_err(anyhow::Error::from)?;
 

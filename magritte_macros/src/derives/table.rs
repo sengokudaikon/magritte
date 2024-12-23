@@ -14,7 +14,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut attrs = input.attrs.clone();
     let table_attr = Table::extract_attributes(&mut attrs)?;
     let crate_name = get_crate_name(false);
-    
+
     // Use shared table name resolution
     let table_name = resolve_table_name(&table_attr, ident);
     if table_name == "Dummy" {
@@ -37,13 +37,13 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
                 "pub enum ", stringify!(#ident), "Events {}\n",
                 "Even if you don't need indexes or events, these empty enums are required."
             );
-            
+
             // This will fail at compile time if the enums don't exist or don't implement required traits
             trait AssertEnums {
                 type Indexes: #crate_name::IndexType;
                 type Events: #crate_name::EventType;
             }
-            
+
             // If traits aren't implemented, show the error at compile time
             impl AssertEnums for #ident {
                 type Indexes = #indexes_ident;

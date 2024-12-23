@@ -1,6 +1,6 @@
 use super::Result;
 use crate::ensure_overwrite;
-use magritte::EdgeSnapshot;
+use magritte::{EdgeSnapshot, TableSnapshot};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -256,5 +256,35 @@ impl EdgeDiff {
         }
 
         Ok(diff)
+    }
+
+    pub fn to_snapshot(&self) -> anyhow::Result<EdgeSnapshot> {
+        let mut snapshot = EdgeSnapshot::new(self.name.clone(), self.current.clone());
+
+        // Add all fields that weren't removed and were either added or modified
+        for (field_name, field_def) in &self.added_columns {
+            snapshot.add_field(field_name.clone(), field_def.clone());
+        }
+        for (field_name, (_, new_def)) in &self.modified_columns {
+            snapshot.add_field(field_name.clone(), new_def.clone());
+        }
+
+        // Same for indexes
+        for (index_name, index_def) in &self.added_indexes {
+            snapshot.add_index(index_name.clone(), index_def.clone());
+        }
+        for (index_name, (_, new_def)) in &self.modified_indexes {
+            snapshot.add_index(index_name.clone(), new_def.clone());
+        }
+
+        // And events
+        for (event_name, event_def) in &self.added_events {
+            snapshot.add_event(event_name.clone(), event_def.clone());
+        }
+        for (event_name, (_, new_def)) in &self.modified_events {
+            snapshot.add_event(event_name.clone(), new_def.clone());
+        }
+
+        Ok(snapshot)
     }
 }

@@ -1,3 +1,4 @@
+use inventory::collect;
 use magritte_macros::{Edge, Event, Index, Relation, Table};
 use magritte_query::types::{EventType, IndexType, RelationType};
 use magritte_query::{HasId, RecordType, Relations, SurrealId};
@@ -38,7 +39,7 @@ pub trait HasRelations {
 }
 
 // Re-export common traits
-use crate::{ColumnDef, EventDef, IndexDef};
+use crate::{ColumnDef, EventDef, EventRegistration, IndexDef, IndexRegistration};
 pub use crate::{ColumnTrait, EventTrait, IndexTrait, TableTrait};
 
 // Export type aliases for common patterns

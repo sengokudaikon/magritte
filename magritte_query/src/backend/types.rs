@@ -31,6 +31,7 @@ pub use return_type::*;
 pub use schema::*;
 pub use schema::SchemaType;
 pub use field_type::*;
+
 pub trait NamedType {
     fn table_name() -> &'static str;
 }
