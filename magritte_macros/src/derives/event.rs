@@ -182,11 +182,7 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
                 fn event_defs() -> Vec<#crate_name::EventDef> {
                     use strum::IntoEnumIterator;
-                    let defs = #ident::iter().map(|e| e.def()).collect();
-                    inventory::submit! {
-                        #crate_name::EventRegistration::new::<#parent #type_generics>(defs.clone())
-                    };
-                    defs
+                    #ident::iter().map(|e| e.def()).collect()
                 }
             }
 
@@ -273,6 +269,16 @@ pub fn expand_derive_event(mut input: DeriveInput) -> syn::Result<TokenStream> {
             }
             #[automatically_derived]
             impl #impl_generics ::core::cmp::Eq for #ident #type_generics #where_clause {}
+
+            inventory::submit! {
+                #crate_name::EventRegistration {
+                    builder: || -> Vec<#crate_name::EventDef> {
+                        use strum::IntoEnumIterator;
+                        #ident::iter().map(|e| e.def()).collect()
+                    },
+                    type_id: std::any::TypeId::of::<#parent #type_generics>(),
+                }
+            }
         }
     };
     Ok(quote! {

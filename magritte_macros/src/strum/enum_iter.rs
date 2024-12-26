@@ -66,8 +66,7 @@ pub fn enum_iter_inner(ast: &DeriveInput) -> syn::Result<TokenStream> {
     let iter_name = syn::parse_str::<Ident>(&format!("{}Iter", name))?;
 
     // Create a string literal "MyEnumIter" to use in the debug impl.
-    let iter_name_debug_struct =
-        syn::parse_str::<syn::LitStr>(&format!("\"{}\"", iter_name))?;
+    let iter_name_debug_struct = syn::parse_str::<syn::LitStr>(&format!("\"{}\"", iter_name))?;
 
     Ok(quote! {
         #[doc = #doc_comment]

@@ -1,11 +1,11 @@
-#[cfg(test)]
-use serde::{Deserialize, Serialize};
-use pretty_assertions::assert_eq;
-use magritte::*;
 use crate::{Posts, Product, ProductColumns, User};
+use magritte::*;
+use pretty_assertions::assert_eq;
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 // Test table with as_select
-#[derive(Table, Serialize, Deserialize,  Clone)]
+#[derive(Table, Serialize, Deserialize, Clone)]
 #[table(
     name = "active_users",
     as_select = {
@@ -33,7 +33,7 @@ impl HasId for ActiveUsers {
     }
 }
 // Test table with generics
-#[derive(Table, Serialize, Deserialize,  Clone)]
+#[derive(Table, Serialize, Deserialize, Clone)]
 #[table(name = "generic_items")]
 pub struct GenericItem {
     id: SurrealId<Self>,
@@ -64,12 +64,12 @@ fn test_table_derives() {
     assert!(def.changefeed().is_some());
 
     // Table with as_select
-    let active_users = ActiveUsers { id: "1".into(), name: "John".to_string() };
+    let active_users = ActiveUsers {
+        id: "1".into(),
+        name: "John".to_string(),
+    };
     let def = active_users.def_owned();
-    assert_eq!(
-        def.as_select(),
-        Some("* FROM users WHERE active == true")
-    );
+    assert_eq!(def.as_select(), Some("* FROM users WHERE active == true"));
     let product = Product {
         id: "1".into(),
         name: "".to_string(),
@@ -81,18 +81,15 @@ fn test_table_derives() {
     // Generic table
     GenericItem {
         id: "1".into(),
-        data: product.as_record()
+        data: product.as_record(),
     };
-    assert_eq!(
-        GenericItem::table_name(),
-        "generic_items"
-    );
+    assert_eq!(GenericItem::table_name(), "generic_items");
 }
 
 #[test]
 fn test_statement_generation() -> Result<()> {
     // Test basic column statement
-    let name_stmt = ProductColumns::Name.def().to_statement().build()?;
+    let name_stmt = ProductColumns::Name.def().to_statement().build().map_err(anyhow::Error::from)?;
     assert!(name_stmt.contains("DEFINE FIELD name ON TABLE products"));
     assert!(name_stmt.contains("TYPE string"));
 

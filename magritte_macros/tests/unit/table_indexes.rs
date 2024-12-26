@@ -1,11 +1,11 @@
-use magritte::*;
-use serde::{Deserialize, Serialize};
-use pretty_assertions::assert_eq;
 use super::Product;
 use super::User;
+use magritte::*;
+use pretty_assertions::assert_eq;
+use serde::{Deserialize, Serialize};
 
 // Test index for Product table
-#[derive(Index, Serialize, Deserialize,strum::EnumIter)]
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
 pub enum ProductIndexes {
     #[index(
         name = "price_idx",
@@ -24,7 +24,7 @@ pub enum ProductIndexes {
 }
 
 // Test index for UserModel table
-#[derive(Index, Serialize, Deserialize,strum::EnumIter)]
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
 pub enum UserIndexes {
     #[index(
         name = "email_idx",
@@ -75,7 +75,10 @@ fn test_user_model_indexes_derive() {
     assert_eq!(email_idx.def().fields(), None);
     assert_eq!(email_idx.def().columns(), Some(vec!["email"]));
     assert_eq!(email_idx.def().is_unique(), true);
-    assert_eq!(email_idx.def().comment(), Some("Unique index on user email"));
+    assert_eq!(
+        email_idx.def().comment(),
+        Some("Unique index on user email")
+    );
     assert_eq!(email_idx.def().is_concurrent(), false);
 
     // Test NameIdx
@@ -85,7 +88,10 @@ fn test_user_model_indexes_derive() {
     assert_eq!(name_idx.def().fields(), Some(vec!["name"]));
     assert_eq!(name_idx.def().columns(), None);
     assert_eq!(name_idx.def().is_unique(), false);
-    assert_eq!(name_idx.def().comment(), Some("IF NOT EXISTS index on user name"));
+    assert_eq!(
+        name_idx.def().comment(),
+        Some("IF NOT EXISTS index on user name")
+    );
     assert_eq!(name_idx.def().is_concurrent(), false);
     assert_eq!(name_idx.def().if_not_exists(), true);
 }
@@ -97,11 +103,11 @@ fn test_index_statements() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
-        },
+        }
         Err(e) => {
             eprintln!("Failed to get statement: {}", e);
             "".to_string()
-        },
+        }
     };
 
     assert!(price_idx_stmt.contains("DEFINE INDEX price_idx ON products"));
@@ -115,11 +121,11 @@ fn test_index_statements() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
-        },
+        }
         Err(e) => {
             eprintln!("Failed to get statement: {}", e);
             "".to_string()
-        },
+        }
     };
     assert!(name_idx_stmt.contains("DEFINE INDEX name_idx ON products"));
     assert!(name_idx_stmt.contains("COLUMNS name"));
@@ -132,11 +138,11 @@ fn test_index_statements() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
-        },
+        }
         Err(e) => {
             eprintln!("Failed to get statement: {}", e);
             "".to_string()
-        },
+        }
     };
     assert!(email_idx_stmt.contains("DEFINE INDEX email_idx ON users"));
     assert!(email_idx_stmt.contains("COLUMNS email"));
@@ -149,11 +155,11 @@ fn test_index_statements() {
         Ok(stmt) => {
             println!("{}", stmt);
             stmt
-        },
+        }
         Err(e) => {
             eprintln!("Failed to get statement: {}", e);
             "".to_string()
-        },
+        }
     };
     assert!(name_idx_stmt.contains("DEFINE INDEX IF NOT EXISTS name_idx ON users"));
     assert!(name_idx_stmt.contains("FIELDS name"));

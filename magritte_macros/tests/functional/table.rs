@@ -1,11 +1,18 @@
 use crate::User;
 use magritte::entity_crud::{BasicCrud, SurrealCrud};
-use magritte::test_util::test_db;
 use magritte::{ColumnTrait, TableTrait};
 use magritte_query::types::HasId;
-use magritte_query::SurrealId;
+use magritte_query::{SurrealDB, SurrealId};
 use pretty_assertions::assert_eq;
+use std::sync::Arc;
+use surrealdb::engine::any::{connect, Any};
+use surrealdb::Surreal;
 
+async fn test_db() -> anyhow::Result<SurrealDB> {
+    let db: Surreal<Any> = connect("mem://").await?;
+    db.use_ns("test").use_db("test").await?;
+    Ok(Arc::new(db))
+}
 #[tokio::test]
 async fn test_create_and_query_records() -> anyhow::Result<()> {
     let db = test_db().await?;

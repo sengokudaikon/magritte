@@ -1,13 +1,14 @@
+use heck::ToSnakeCase;
+use magritte_query::types::TableType;
+use magritte_query::{FieldType, Literal};
 use proc_macro::Ident;
+use quote::quote;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Display;
 use std::str::FromStr;
-use quote::quote;
-use serde::{Deserialize, Serialize};
 use syn::{DataEnum, Fields, Lit, Type, TypeArray, TypePath};
-use magritte_query::types::TableType;
-use magritte_query::{FieldType, Literal};
-use std::collections::BTreeMap;
 
 fn handle_set_type(args: &syn::PathArguments) -> FieldType {
     if let syn::PathArguments::AngleBracketed(args) = args {
@@ -34,7 +35,9 @@ fn handle_enum_type(data: &DataEnum) -> FieldType {
         .iter()
         .filter_map(|variant| {
             match &variant.fields {
-                Fields::Unit => Some(FieldType::Literal(Literal::String(variant.ident.to_string()))),
+                Fields::Unit => Some(FieldType::Literal(Literal::String(
+                    variant.ident.to_string(),
+                ))),
                 Fields::Unnamed(fields) if fields.unnamed.len() == 1 => {
                     let field = fields.unnamed.first()?;
                     Some(type_to_surrealdb_type(&field.ty))
@@ -108,17 +111,17 @@ pub fn type_to_surrealdb_type(ty: &Type) -> FieldType {
                 [seg] if seg.ident == "Set" || seg.ident == "HashSet" => {
                     handle_set_type(&seg.arguments)
                 }
-                
+
                 [seg] if seg.ident == "RecordRef" => {
                     if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
                         if let Some(syn::GenericArgument::Type(Type::Path(type_path))) =
                             args.args.first()
                         {
                             if let Some(seg) = type_path.path.segments.last() {
-                                let table_name = seg.ident.to_string().to_lowercase();
-                                FieldType::Record(vec![table_name])
+                                let table_name = seg.ident.to_string().to_snake_case();
+                                FieldType::Record(table_name)
                             } else {
-                                FieldType::Record(vec![])
+                                FieldType::Record("".to_string())
                             }
                         } else {
                             FieldType::Any
@@ -129,29 +132,27 @@ pub fn type_to_surrealdb_type(ty: &Type) -> FieldType {
                 }
 
                 // Feature-gated types
-                [ns, seg] if ns.ident == "chrono" && seg.ident == "DateTime" => {
-                    FieldType::Datetime
-                }
+                [ns, seg] if ns.ident == "chrono" && seg.ident == "DateTime" => FieldType::Datetime,
                 [ns, seg] if ns.ident == "rust_decimal" && seg.ident == "Decimal" => {
                     FieldType::Decimal
                 }
                 [ns, seg] if ns.ident == "geo" && seg.ident == "Point" => {
-                    FieldType::Geometry(vec!["point".to_string()])
+                    FieldType::Geometry("point".to_string())
                 }
                 [ns, seg] if ns.ident == "geo" && seg.ident == "LineString" => {
-                    FieldType::Geometry(vec!["linestring".to_string()])
+                    FieldType::Geometry("linestring".to_string())
                 }
                 [ns, seg] if ns.ident == "geo" && seg.ident == "Polygon" => {
-                    FieldType::Geometry(vec!["polygon".to_string()])
+                    FieldType::Geometry("polygon".to_string())
                 }
                 [ns, seg] if ns.ident == "geo" && seg.ident == "MultiPoint" => {
-                    FieldType::Geometry(vec!["multipoint".to_string()])
+                    FieldType::Geometry("multipoint".to_string())
                 }
                 [ns, seg] if ns.ident == "geo" && seg.ident == "MultiLineString" => {
-                    FieldType::Geometry(vec!["multilinestring".to_string()])
+                    FieldType::Geometry("multilinestring".to_string())
                 }
                 [ns, seg] if ns.ident == "geo" && seg.ident == "MultiPolygon" => {
-                    FieldType::Geometry(vec!["multipolygon".to_string()])
+                    FieldType::Geometry("multipolygon".to_string())
                 }
                 [ns, seg] if ns.ident == "uuid" && seg.ident == "Uuid" => FieldType::Uuid,
                 [seg] if seg.ident == "Datetime" => FieldType::Datetime,
@@ -169,16 +170,22 @@ pub fn type_to_surrealdb_type(ty: &Type) -> FieldType {
                     FieldType::Array(Box::new(FieldType::Any), None)
                 }
                 [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Geometry" => {
-                    FieldType::Geometry(vec!["feature".to_string()])
+                    FieldType::Geometry("feature".to_string())
                 }
-                [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Duration" => FieldType::Duration,
-                [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Operation" => FieldType::Object,
+                [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Duration" => {
+                    FieldType::Duration
+                }
+                [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Operation" => {
+                    FieldType::Object
+                }
                 [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Strand" => FieldType::String,
-                [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Datetime" => FieldType::Datetime,
+                [ns, seg] if ns.ident == "surrealdb" && seg.ident == "Datetime" => {
+                    FieldType::Datetime
+                }
                 [ns, module, seg]
                     if ns.ident == "surrealdb" && module.ident == "sql" && seg.ident == "Thing" =>
                 {
-                    FieldType::Record(vec![])
+                    FieldType::Record("".to_string())
                 }
                 [ns, module, seg]
                     if ns.ident == "surrealdb"
@@ -193,7 +200,7 @@ pub fn type_to_surrealdb_type(ty: &Type) -> FieldType {
                     FieldType::Uuid
                 }
                 [ns, seg] if ns.ident == "surrealdb" && seg.ident == "RecordId" => {
-                    FieldType::Record(vec![])
+                    FieldType::Record("".to_string())
                 }
 
                 [ns, seg]

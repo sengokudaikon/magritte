@@ -1,10 +1,10 @@
-use super::{attributes::{split_generics, Relate}};
+use super::attributes::{split_generics, Relate};
 use deluxe::ExtractAttributes;
+use macro_helpers::get_crate_name;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
-use syn::{DeriveInput, Path};
 use syn::spanned::Spanned;
-use macro_helpers::get_crate_name;
+use syn::{DeriveInput, Path};
 
 fn strip_relations_suffix(ident: &syn::Ident) -> Path {
     let name = ident.to_string();
@@ -42,9 +42,10 @@ pub fn expand_derive_relation(input: DeriveInput) -> syn::Result<TokenStream> {
             syn::Error::new_spanned(variant, "Relation must specify target Table")
         })?;
 
-        let edge_table = attrs.edge.take().ok_or_else(|| {
-            syn::Error::new_spanned(variant, "Relation must specify edge Table")
-        })?;
+        let edge_table = attrs
+            .edge
+            .take()
+            .ok_or_else(|| syn::Error::new_spanned(variant, "Relation must specify edge Table"))?;
         let load_strategy = match attrs.eager {
             true => quote!(Some(#crate_name::LoadStrategy::Eager)),
             false => quote!(Some(#crate_name::LoadStrategy::Lazy)),

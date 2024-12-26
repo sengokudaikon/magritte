@@ -1,8 +1,8 @@
-use anyhow::anyhow;
 use crate::{Order, OrderColumns, User};
+use anyhow::Result;
+use magritte::*;
 use pretty_assertions::assert_eq;
 use serde::{Deserialize, Serialize};
-use magritte::*;
 
 // Test table events
 #[derive(Event, Serialize, Deserialize, strum::EnumIter)]
@@ -22,7 +22,6 @@ pub enum OrderEvents {
     Created,
 }
 
-
 #[test]
 fn test_complex_column_derives() -> Result<()> {
     // Test relationship column definitions
@@ -38,7 +37,10 @@ fn test_complex_column_derives() -> Result<()> {
     // Test enum-like value constraints
     let status_def = OrderColumns::Status.def();
     assert_eq!(status_def.column_type(), "string");
-    let status_stmt = status_def.to_statement().build().map_err(anyhow::Error::from)?;
+    let status_stmt = status_def
+        .to_statement()
+        .build()
+        .map_err(anyhow::Error::from)?;
     assert!(status_stmt.contains("VALUE"));
     assert!(status_stmt.contains("pending"));
     assert!(status_stmt.contains("delivered"));
@@ -63,18 +65,30 @@ fn test_complex_column_derives() -> Result<()> {
 #[test]
 fn test_column_statement_variations() -> Result<()> {
     // Test relationship field statement
-    let user_stmt = OrderColumns::User.def().to_statement().build().map_err(anyhow::Error::from)?;
+    let user_stmt = OrderColumns::User
+        .def()
+        .to_statement()
+        .build()
+        .map_err(anyhow::Error::from)?;
     assert!(user_stmt.contains("DEFINE FIELD user ON TABLE orders"));
     assert!(user_stmt.contains("TYPE record<users>"));
     assert!(user_stmt.contains("ASSERT value != NONE"));
 
     // Test array relationship statement
-    let items_stmt = OrderColumns::Items.def().to_statement().build().map_err(anyhow::Error::from)?;
+    let items_stmt = OrderColumns::Items
+        .def()
+        .to_statement()
+        .build()
+        .map_err(anyhow::Error::from)?;
     assert!(items_stmt.contains("DEFINE FIELD items ON TABLE orders"));
     assert!(items_stmt.contains("TYPE array<record<products>>"));
 
     // Test enum-like value constraint statement
-    let status_stmt = OrderColumns::Status.def().to_statement().build().map_err(anyhow::Error::from)?;
+    let status_stmt = OrderColumns::Status
+        .def()
+        .to_statement()
+        .build()
+        .map_err(anyhow::Error::from)?;
     assert!(status_stmt.contains("DEFINE FIELD status ON TABLE orders"));
     let expected_value = "pending|processing|shipped|delivered";
     assert!(status_stmt.contains(format!("VALUE {}", expected_value).as_str()));
@@ -88,7 +102,10 @@ fn test_table_events() -> Result<()> {
     assert_eq!(OrderEvents::table_name(), "orders");
     assert_eq!(created.event_name(), "created");
     // Test event statements
-    let created_stmt = created.to_statement().map_err(anyhow::Error::from)?.build()?;
+    let created_stmt = created
+        .to_statement()?
+        .build()
+        .map_err(anyhow::Error::from)?;
     assert!(created_stmt.contains("DEFINE EVENT created ON TABLE orders"));
     assert!(created_stmt.contains("WHEN $before==NONE"));
     assert!(created_stmt.contains("THEN UPDATE orders SET status = 'pending';"));

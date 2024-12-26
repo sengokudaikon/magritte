@@ -1,13 +1,13 @@
-use serde::{Deserialize, Serialize};
-use pretty_assertions::assert_eq;
-use magritte::*;
-use super::User;
 use super::Order;
 use super::Product;
-
+use super::User;
+use anyhow::Result;
+use magritte::*;
+use pretty_assertions::assert_eq;
+use serde::{Deserialize, Serialize};
 
 // Test edge between Order and Product
-#[derive(Edge, Serialize, Deserialize,  Clone)]
+#[derive(Edge, Serialize, Deserialize, Clone)]
 #[edge(name = "order_product", from = Order, to = Product, schema = "SCHEMALESS", enforced)]
 pub struct OrderProduct {
     id: SurrealId<Self>,
@@ -25,7 +25,7 @@ impl HasId for OrderProduct {
 }
 
 // Test edge between User and Order
-#[derive(Edge, Serialize, Deserialize,  Clone)]
+#[derive(Edge, Serialize, Deserialize, Clone)]
 #[edge(from = User, to = Order, if_not_exists)]
 pub struct UserOrder {
     id: SurrealId<Self>,
@@ -87,13 +87,20 @@ fn test_user_order_edge_derive() {
 #[test]
 fn test_edge_statements() -> Result<()> {
     // Test OrderProductEdge statement
-    let order_product_edge_stmt = OrderProduct::new().to_statement_owned().build()?;
+    let order_product_edge_stmt = OrderProduct::new()
+        .to_statement_owned()
+        .build()
+        .map_err(anyhow::Error::from)?;
     println!("{}", order_product_edge_stmt);
-    assert!(order_product_edge_stmt.contains("DEFINE TABLE order_product TYPE RELATION SCHEMALESS FROM orders TO products ENFORCED"));
+    assert!(order_product_edge_stmt.contains(
+        "DEFINE TABLE order_product TYPE RELATION SCHEMALESS FROM orders TO products ENFORCED"
+    ));
 
     // Test UserOrderEdge statement
     let user_order_edge_stmt = UserOrder::new().to_statement_owned().build()?;
-    assert!(user_order_edge_stmt.contains("DEFINE TABLE IF NOT EXISTS user_order TYPE RELATION SCHEMAFULL FROM users TO orders"));
+    assert!(user_order_edge_stmt.contains(
+        "DEFINE TABLE IF NOT EXISTS user_order TYPE RELATION SCHEMAFULL FROM users TO orders"
+    ));
     Ok(())
 }
 

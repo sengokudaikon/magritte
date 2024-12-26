@@ -2,21 +2,22 @@ use super::attributes::{split_generics, Edge};
 use crate::derives::{conversion, expand_derive_column, expr_array_to_vec};
 use deluxe::ExtractAttributes;
 use heck::ToSnakeCase;
+use macro_helpers::get_crate_name;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Data, DeriveInput};
 use syn::parse::Parser;
-use macro_helpers::get_crate_name;
+use syn::{Data, DeriveInput};
 
 pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
-
     // Verify this is a struct
     match input.data {
-        Data::Struct(_) => {},
-        _ => return Err(syn::Error::new_spanned(
-            input,
-            "Edge can only be derived for structs",
-        )),
+        Data::Struct(_) => {}
+        _ => {
+            return Err(syn::Error::new_spanned(
+                input,
+                "Edge can only be derived for structs",
+            ))
+        }
     }
 
     let ident = &input.ident;
@@ -26,8 +27,7 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
     // Get the actual edge name that will be used - either from edge(name=) or struct name
     let edge_name = attrs
         .name
-        .as_ref()
-        .map(|name| name.clone())
+        .clone()
         .unwrap_or_else(|| ident.to_string().to_snake_case());
     let edge_name_lit = quote!(#edge_name);
     let from_type = attrs

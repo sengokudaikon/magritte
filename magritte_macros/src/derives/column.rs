@@ -1,4 +1,3 @@
-use std::fmt::format;
 use super::{
     attributes::{resolve_table_name, split_generics, Column, Table},
     expr_array_to_vec,
@@ -6,11 +5,12 @@ use super::{
 use crate::conversion::type_to_surrealdb_type;
 use deluxe::ExtractAttributes;
 use heck::{ToPascalCase, ToSnakeCase};
+use macro_helpers::get_crate_name;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use serde_json::map;
-use syn::{Data, DeriveInput, ExprArray, Field, Fields, parse_quote};
-use macro_helpers::get_crate_name;
+use std::fmt::format;
+use syn::{parse_quote, Data, DeriveInput, ExprArray, Field, Fields};
 
 fn extract_field_type(field: &Field) -> String {
     type_to_surrealdb_type(&field.ty).to_string()
@@ -22,7 +22,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     // Get the actual table name that will be used
     let attrs = Table::extract_attributes(&mut input.attrs)?;
     let entity_name = &input.ident;
-    
+
     let table_name = resolve_table_name(&attrs, entity_name);
     let table_name_str = &*table_name;
     let column_enum_name = format_ident!("{}Columns", entity_name);
@@ -76,7 +76,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         } else {
             extract_field_type(field)
         };
-        let type_name = field_attrs.type_name.clone().unwrap_or_else(|| field_type);
+        let type_name = field_attrs.type_name.clone().unwrap_or(field_type);
         let permissions = match field_attrs.permissions.as_ref() {
             None => quote!(None), //None,
             Some(elems) => {
@@ -88,22 +88,10 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         // Determine nullability based on field type if not explicitly set
         let is_nullable = field_attrs.nullable;
 
-        let default = field_attrs
-            .default
-            .as_ref()
-            .map(|expr| quote!(#expr));
-        let assert = field_attrs
-            .assert
-            .as_ref()
-            .map(|expr| quote!(#expr));
-        let comment = field_attrs
-            .comment
-            .as_ref()
-            .map(|expr| quote!(#expr));
-        let value = field_attrs
-            .value
-            .as_ref()
-            .map(|expr| quote!(#expr));
+        let default = field_attrs.default.as_ref().map(|expr| quote!(#expr));
+        let assert = field_attrs.assert.as_ref().map(|expr| quote!(#expr));
+        let comment = field_attrs.comment.as_ref().map(|expr| quote!(#expr));
+        let value = field_attrs.value.as_ref().map(|expr| quote!(#expr));
         let readonly = field_attrs.readonly;
         let flexible = field_attrs.flexible;
         let overwrite = field_attrs.overwrite;
@@ -152,7 +140,7 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     }
 
     let err_type = quote!(#crate_name::ColumnFromStrErr);
-    
+
     Ok(quote! {
         impl #impl_generics #crate_name::HasColumns for #entity_type #type_generics #where_clause {
             fn columns() -> Vec<#column_enum_name #type_generics> {
@@ -239,4 +227,3 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
         }
     })
 }
-

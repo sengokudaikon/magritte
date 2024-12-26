@@ -1,7 +1,5 @@
-#![feature(slice_take)]
-
-use magritte_macros::Table;
-use magritte_query::{HasId, RecordRef, SurrealId};
+#![feature(const_type_id)]
+use magritte::*;
 use serde::{Deserialize, Serialize};
 
 mod table;
@@ -56,6 +54,19 @@ impl Order {
         }
     }
 }
+
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
+pub enum OrderIndexes {
+    #[index(
+        name = "status_idx",
+        fields = [status],
+        comment = "Index on order status"
+    )]
+    StatusIdx,
+}
+
+#[derive(Event, Serialize, Deserialize, strum::EnumIter)]
+pub enum OrderEvents {}
 
 #[derive(Table, Serialize, Deserialize, Clone)]
 #[table(name = "products", schema = "SCHEMALESS")]
@@ -117,6 +128,26 @@ impl Product {
     }
 }
 
+#[derive(Event, Serialize, Deserialize, strum::EnumIter)]
+pub enum ProductEvents {
+    #[event(
+        name = "created",
+        when = "var:before==NONE",
+        then = "UPDATE products SET status = 'pending';
+            CREATE log SET
+            order = var:value.id,
+            action     = 'product' + ' ' + var:event.lowercase(),
+            old_status  = '',
+            new_status  = var:after.status ?? 'pending',
+            at         = time::now()
+            "
+    )]
+    ProductCreated,
+}
+
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
+pub enum ProductIndexes {}
+
 #[derive(Table, Clone, Serialize, Deserialize)]
 #[table(name = "users")]
 pub struct User {
@@ -150,6 +181,11 @@ impl User {
     }
 }
 
+#[derive(Event, Serialize, Deserialize, strum::EnumIter)]
+pub enum UserEvents {}
+
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
+pub enum UserIndexes {}
 // Test table with all possible attributes
 #[derive(Table, Serialize, Deserialize, Clone)]
 #[table(
@@ -180,3 +216,8 @@ impl Posts {
         }
     }
 }
+#[derive(Event, Serialize, Deserialize, strum::EnumIter)]
+pub enum PostsEvents {}
+
+#[derive(Index, Serialize, Deserialize, strum::EnumIter)]
+pub enum PostsIndexes {}

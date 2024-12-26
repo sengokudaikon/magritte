@@ -1,12 +1,12 @@
-use std::time::Duration;
 use crate::derives::attributes::{resolve_table_name, split_generics, Table};
 use crate::derives::column::expand_derive_column;
 use crate::derives::expr_array_to_vec;
 use deluxe::ExtractAttributes;
+use macro_helpers::get_crate_name;
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::time::Duration;
 use syn::{DeriveInput, Fields, FieldsNamed};
-use macro_helpers::get_crate_name;
 
 pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let ident = &input.ident;
@@ -123,7 +123,10 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     };
 
     let has_id_field = fields.iter().any(|field| {
-        field.ident.as_ref().map_or(false, |ident| ident.to_string().to_lowercase() == "id")
+        field
+            .ident
+            .as_ref()
+            .map_or(false, |ident| ident.to_string().to_lowercase() == "id")
     });
 
     if !has_id_field {

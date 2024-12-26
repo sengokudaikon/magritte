@@ -1,9 +1,9 @@
 use deluxe::{ExtractAttributes, ParseMetaItem};
+use heck::ToSnakeCase;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use std::fmt::{Display, Formatter};
-use heck::ToSnakeCase;
 use serde::ser::Error;
+use std::fmt::{Display, Formatter};
 use syn::{DeriveInput, Expr, ExprArray, LitStr, Path};
 
 #[derive(Default, ParseMetaItem)]
@@ -43,7 +43,7 @@ impl Display for AsSelect {
         if let Some(select) = &self.select {
             query.push_str(&format!("{}", quote!(#select)));
         } else {
-            query.push_str("*");
+            query.push('*');
         }
         if let Some(from) = &self.from {
             query.push_str(&format!(" FROM {}", quote!(#from)));
@@ -196,7 +196,7 @@ pub struct Relate {
     #[deluxe(default)]
     pub content: Option<Expr>,
     #[deluxe(default)]
-    pub eager: bool
+    pub eager: bool,
 }
 
 impl ToTokens for Relate {
@@ -365,7 +365,11 @@ pub struct Search {
 
 impl ToTokens for Search {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Search { analyzer, bm25, highlights } = self;
+        let Search {
+            analyzer,
+            bm25,
+            highlights,
+        } = self;
         let expanded = quote! {
             Search {
                 analyzer: #analyzer,
@@ -439,7 +443,7 @@ impl Display for MTree {
         let dimension = if let Some(dimension) = self.dimension {
             format!("DIMENSION {}", dimension)
         } else {
-            return Err(core::fmt::Error::custom("Dimension must be provided"))
+            return Err(core::fmt::Error::custom("Dimension must be provided"));
         };
         let vector_type = if let Some(vector_type) = &self.vector_type {
             format!(" TYPE {}", vector_type)
@@ -456,14 +460,11 @@ impl Display for MTree {
         } else {
             "".to_string()
         };
-        write!(
-            f,
-            "MTREE {}{}{}{}",
-            dimension, vector_type, dist, capacity
-        )
+        write!(f, "MTREE {}{}{}{}", dimension, vector_type, dist, capacity)
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Default, ParseMetaItem)]
 pub struct HNSW {
     #[deluxe(default)]
@@ -503,7 +504,7 @@ impl Display for HNSW {
         let dimension = if let Some(dimension) = self.dimension {
             format!("DIMENSION {}", dimension)
         } else {
-            return Err(core::fmt::Error::custom("Dimension must be provided"))
+            return Err(core::fmt::Error::custom("Dimension must be provided"));
         };
         let vector_type = if let Some(vector_type) = &self.vector_type {
             format!(" TYPE {}", vector_type)
@@ -525,11 +526,7 @@ impl Display for HNSW {
         } else {
             "".to_string()
         };
-        write!(
-            f,
-            "HNSW {}{}{}{}{}",
-            dimension, vector_type, dist, efc, m
-        )
+        write!(f, "HNSW {}{}{}{}{}", dimension, vector_type, dist, efc, m)
     }
 }
 #[derive(Default, ExtractAttributes)]
