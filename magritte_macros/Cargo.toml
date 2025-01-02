@@ -6,6 +6,13 @@ authors = [
     "Daniil Zavrin <hanamik0@proton.me>",
 ]
 description = "Derive macros for magritte"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/sengokudaikon/magritte"
+documentation = "https://docs.rs/magritte_macros"
+readme = "README.md"
+keywords = ["surrealdb", "macros", "derive", "database"]
+categories = ["database", "development-tools"]
+
 [lib]
 proc-macro = true
 [dependencies]

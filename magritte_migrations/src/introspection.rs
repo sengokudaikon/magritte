@@ -1,23 +1,36 @@
-use crate::error::Result;
-use magritte::{DbInfo, Query, SchemaSnapshot, SurrealDB, TableInfo, TableSnapshot};
+//! Database schema introspection functionality.
+//!
+//! This module provides tools for inspecting and capturing the current state
+//! of a SurrealDB database schema, including tables, edges, fields, indexes,
+//! and events.
 
+use crate::error::Result;
+use magritte::{DbInfo, Query, SchemaSnapshot, Snapshot, SurrealDB, TableInfo, TableSnapshot};
+
+/// Report of validation issues found when comparing schemas.
 #[derive(Debug, Default)]
 pub struct ValidationReport {
+    /// Schema elements that don't match expected definitions
     pub mismatches: Vec<String>,
+    /// Schema elements that are missing from the current schema
     pub missing: Vec<String>,
+    /// Schema elements that exist but weren't expected
     pub unexpected: Vec<String>,
 }
 
 impl ValidationReport {
+    /// Creates a new empty validation report.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Returns true if any validation issues were found.
     pub fn has_issues(&self) -> bool {
         !self.mismatches.is_empty() || !self.missing.is_empty() || !self.unexpected.is_empty()
     }
 }
 
+/// Gets database information including all tables and their definitions.
 pub async fn get_db_info(db: SurrealDB) -> Result<DbInfo> {
     Ok(Query::info(db)
         .info_db()
@@ -25,6 +38,7 @@ pub async fn get_db_info(db: SurrealDB) -> Result<DbInfo> {
         .map_err(anyhow::Error::from)?)
 }
 
+/// Gets detailed information about a specific table.
 pub async fn get_table_info(db: SurrealDB, table: &str) -> Result<TableInfo> {
     Ok(Query::info(db)
         .info_table(table)
@@ -32,6 +46,15 @@ pub async fn get_table_info(db: SurrealDB, table: &str) -> Result<TableInfo> {
         .map_err(anyhow::Error::from)?)
 }
 
+/// Creates a snapshot of the current database schema state.
+///
+/// This function queries the database to build a complete picture of the
+/// current schema, including:
+/// - Table definitions
+/// - Field definitions
+/// - Index definitions
+/// - Event definitions
+/// - Edge table definitions
 pub async fn create_snapshot_from_db(db: SurrealDB) -> Result<SchemaSnapshot> {
     let mut snapshot = SchemaSnapshot::new();
     let db_info = get_db_info(db.clone()).await?;
@@ -62,6 +85,18 @@ pub async fn create_snapshot_from_db(db: SurrealDB) -> Result<SchemaSnapshot> {
     Ok(snapshot)
 }
 
+/// Validates a migration by comparing expected schema against current DB state.
+///
+/// This function performs a detailed comparison between the expected schema
+/// (from the migration) and the actual schema in the database. It reports:
+/// - Mismatched definitions
+/// - Missing schema elements
+/// - Unexpected schema elements
+///
+/// # Arguments
+///
+/// * `db` - Database connection to check current state
+/// * `expected` - Expected schema state from the migration
 pub async fn validate_migration(
     db: SurrealDB,
     expected: &SchemaSnapshot,

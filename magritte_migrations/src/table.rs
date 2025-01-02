@@ -1,9 +1,8 @@
 #![allow(unused)]
-use crate::ensure_overwrite;
-use magritte::TableSnapshot;
+use magritte::{RelationDef, Snapshot, TableSnapshot};
+use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use tracing::event;
+use crate::{ensure_overwrite, Diff};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TableDiff {
@@ -169,11 +168,11 @@ impl TableDiff {
         Ok(statements)
     }
 }
-impl TableDiff {
-    pub fn from_snapshots(
+impl Diff<TableSnapshot> for TableDiff {
+    fn from_snapshots(
         old_table: &TableSnapshot,
         new_table: &TableSnapshot,
-    ) -> anyhow::Result<Self> {
+    ) -> crate::Result<Self> {
         let mut diff = TableDiff::new(
             Some(old_table.define_table_statement.clone()),
             Some(new_table.define_table_statement.clone()),
@@ -242,7 +241,7 @@ impl TableDiff {
 
         Ok(diff)
     }
-    pub fn to_snapshot(&self) -> anyhow::Result<TableSnapshot> {
+    fn to_snapshot(&self) -> crate::Result<TableSnapshot> {
         let mut snapshot = TableSnapshot::new(self.name.clone(), self.current.clone());
 
         // Add all fields that weren't removed and were either added or modified

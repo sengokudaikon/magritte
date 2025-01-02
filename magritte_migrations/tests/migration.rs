@@ -28,18 +28,13 @@ async fn test_full_migration_flow() -> anyhow::Result<()> {
     qb.commit().execute(&db.clone()).await?;
     
     // Get current schema from code (UserV2)
-    let code_snapshot = manager.current_schema_from_code()?;
+    let _code_snapshot = manager.current_schema()?;
     // Generate migration considering DB state
-    let validated_snapshot = manager.generate_migration_with_db_check(
-        db.clone(),
-        &SchemaSnapshot::new(), // Empty snapshot since this is first migration
-        &code_snapshot,
-    ).await?;
     // Create migration files
-    let migration_name = manager.create_empty_migration()?;
+    let migration_name = manager.new_migration(&SchemaSnapshot::new())?;
     
     // Apply migration
-    let res = manager.apply_migration(&db, &migration_name).await;
+    let res = manager.apply_migration(&db, Some(migration_name)).await;
     match res {
         Ok(_) => {
             println!("Migration applied successfully");

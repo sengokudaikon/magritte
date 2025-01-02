@@ -1,25 +1,44 @@
-use super::{introspection, snapshot, Error, Result};
+use super::{introspection, snapshot, Diff, Error, Result, ensure_overwrite};
 use crate::edge::EdgeDiff;
 use crate::snapshot::save_to_file;
 use crate::table::TableDiff;
 use crate::types::FlexibleDateTime;
-use magritte::{
-    EdgeRegistration, EventRegistration, IndexRegistration, Query, SchemaSnapshot, SurrealDB,
-    TableRegistration,
-};
+use magritte::{EdgeRegistration, EventRegistration, IndexRegistration, Query, SchemaSnapshot, Snapshot, SurrealDB, TableRegistration};
 use std::path::PathBuf;
 use tracing::debug;
 
+/// Manager for handling database schema migrations.
+/// 
+/// The `MigrationManager` is responsible for:
+/// - Creating new migrations from current schema
+/// - Applying migrations to the database
+/// - Rolling back to previous schema versions
+/// - Validating schema changes
+/// 
+/// # Example
+/// 
+/// ```rust,ignore
+/// use magritte_migrations::MigrationManager;
+/// use std::path::PathBuf;
+/// 
+/// let manager = MigrationManager::new(PathBuf::from("./migrations"));
+/// ```
 pub struct MigrationManager {
+    /// Directory where migration files are stored
     pub migrations_dir: PathBuf,
 }
 
 impl MigrationManager {
+    /// Creates a new migration manager with the specified migrations directory.
     pub fn new(migrations_dir: PathBuf) -> Self {
         Self { migrations_dir }
     }
 
-    pub fn current_schema_from_code(&self) -> Result<SchemaSnapshot> {
+    /// Gets the current schema from registered tables and edges.
+    /// 
+    /// This method collects schema information from all registered tables and edges,
+    /// including their fields, indexes, and events.
+    pub fn current_schema(&self) -> Result<SchemaSnapshot> {
         let mut schema = SchemaSnapshot::new();
 
         // Process tables
@@ -70,15 +89,108 @@ impl MigrationManager {
         Ok(schema)
     }
 
-    pub fn get_file_stem(path: &str) -> &str {
-        std::path::Path::new(path)
-            .file_stem()
-            .map(|f| f.to_str().unwrap())
-            .unwrap()
+    /// Creates a new migration from the current schema.
+    /// 
+    /// This method generates a new migration file with the current schema state.
+    /// The migration name is automatically generated based on the timestamp.
+    pub fn new_migration(&self, snapshot: &SchemaSnapshot) -> Result<String> {
+        // Determine the next migration number based on existing files
+        let migration_name = self.get_name()?;
+
+        let json_path = self
+            .migrations_dir
+            .join(format!("{}_schema.json", &migration_name));
+        save_to_file(snapshot, &json_path)?;
+
+        Ok(migration_name)
+    }
+
+    /// Creates a snapshot of the current schema state.
+    /// 
+    /// If a database connection is provided, this will also include the current
+    /// database schema state in the snapshot. Otherwise, it will only include
+    /// the registered schema.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `db` - Optional database connection to include current DB state
+    /// * `name` - Optional name for the snapshot file
+    pub async fn create_snapshot(
+        &self,
+        db: Option<SurrealDB>,
+        name: Option<String>,
+    ) -> Result<(PathBuf, Vec<String>)> {
+        // 1. Create base schema from registered entities
+        let current_schema = self.current_schema()?;
+        // 2. If migrations exist, diff against latest
+        let intermediary_schema = if let Some((_, last_snap)) = self.latest()? {
+            let diff_statements = self.diff(&last_snap, &current_schema)?;
+            if !diff_statements.is_empty() {
+                current_schema.clone()
+            } else {
+                last_snap
+            }
+        } else {
+            current_schema.clone()
+        };
+
+        // 3. If DB exists, diff against DB schema and include relations
+        let (final_schema, statements) = if let Some(db) = db {
+            let db_snapshot = introspection::create_snapshot_from_db(db.clone()).await?;
+            let mut diff_statements = self.diff(&db_snapshot, &intermediary_schema)?;
+            
+            (intermediary_schema, diff_statements)
+        } else {
+            (intermediary_schema.clone(), self.diff(&SchemaSnapshot::new(), &intermediary_schema)?)
+        };
+
+        // Save the final snapshot
+        let path = if let Some(name) = name {
+            self.migrations_dir.join(format!("{}.json", name))
+        } else {
+            self.migrations_dir.join(format!("{}_schema.json", self.get_name()?))
+        };
+        save_to_file(&final_schema, &path)?;
+
+        Ok((path, statements))
+    }
+
+    async fn generate_snapshot_diff(
+        &self,
+        db: Option<SurrealDB>,
+        target_snapshot: &SchemaSnapshot,
+    ) -> Result<(SchemaSnapshot, Vec<String>)> {
+        match db {
+            Some(db) => {
+                // Get current DB state
+                let db_snapshot = introspection::create_snapshot_from_db(db.clone()).await?;
+
+                // Validate and generate diff
+                let validated = self.validate_db(
+                    db,
+                    &db_snapshot,
+                    target_snapshot
+                ).await?;
+
+                let statements = self.diff(&db_snapshot, &validated)?;
+                Ok((validated, statements))
+            }
+            None => {
+                // Just diff against latest snapshot if exists
+                let latest = self.latest()?;
+                match latest {
+                    Some((_, last)) => {
+                        let statements = self.diff(&last, target_snapshot)?;
+                        Ok((target_snapshot.clone(), statements))
+                    }
+                    None => Ok((target_snapshot.clone(), vec![]))
+                }
+            }
+        }
     }
 
     //noinspection RsTraitObligations
-    pub fn generate_diff_migration(
+    pub fn diff(
         &self,
         old_snapshot: &SchemaSnapshot,
         new_snapshot: &SchemaSnapshot,
@@ -174,30 +286,14 @@ impl MigrationManager {
         Ok(statements)
     }
 
-    pub fn create_empty_migration(&self) -> Result<String> {
-        let timestamp = Self::get_current_timestamp();
-        let migration_name = format!("{:04}_{}", 0, timestamp);
-        let json_path = self
-            .migrations_dir
-            .join(format!("{}_schema.json", &migration_name));
-        save_to_file(&SchemaSnapshot::new(), &json_path)?;
-
-        Ok(migration_name)
-    }
-
-    pub fn create_new_migration(&self, snapshot: &SchemaSnapshot) -> Result<String> {
-        // Determine the next migration number based on existing files
+    fn get_name(&self) -> Result<String> {
         let next_number = self.next_migration_number()?;
         let timestamp = Self::get_current_timestamp();
         let migration_name = format!("{:04}_{}", next_number, timestamp);
 
-        let json_path = self
-            .migrations_dir
-            .join(format!("{}_schema.json", &migration_name));
-        save_to_file(snapshot, &json_path)?;
-
         Ok(migration_name)
     }
+
 
     fn next_migration_number(&self) -> Result<usize> {
         let entries = std::fs::read_dir(&self.migrations_dir)?;
@@ -223,7 +319,7 @@ impl MigrationManager {
         FlexibleDateTime::now().to_string()
     }
 
-    pub async fn generate_migration_with_db_check(
+    async fn validate_db(
         &self,
         db: SurrealDB,
         stored_snapshot: &SchemaSnapshot,
@@ -273,29 +369,228 @@ impl MigrationManager {
         Ok(schema)
     }
 
-    pub async fn apply_migration(&self, db: &SurrealDB, migration_name: &str) -> Result<()> {
-        // Load the diff
-        let diff_path = self.migrations_dir.join(format!("{}_schema.json", migration_name));
-        let stored_snapshot = snapshot::load_from_file(&diff_path)?;
+    fn latest(&self) -> Result<Option<(PathBuf, SchemaSnapshot)>> {
+        let latest = std::fs::read_dir(&self.migrations_dir)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+            .max_by_key(|e| e.metadata().unwrap().modified().unwrap());
 
-        let code_snapshot = self.current_schema_from_code()?;
-        let validated_snapshot =
-            self.generate_migration_with_db_check(db.clone(), &stored_snapshot, &code_snapshot)
-                .await?;
-
-        let statements = self.generate_diff_migration(&stored_snapshot, &validated_snapshot)?;
-
-        let mut transaction = Query::begin();
-        for stmt in statements {
-            transaction = transaction.raw(&stmt);
+        match latest {
+            Some(entry) => {
+                let path = entry.path();
+                let snapshot = snapshot::load_from_file(&path)?;
+                Ok(Some((path, snapshot)))
+            }
+            None => Ok(None),
         }
-        debug!("Final trn: {}", transaction.clone().commit().build());
-        transaction
-            .commit()
-            .execute(db)
-            .await
-            .map_err(anyhow::Error::from)?;
+    }
+
+    pub async fn check_deviations(
+        &self,
+        db: &SurrealDB,
+        snapshot_path: &PathBuf,
+    ) -> Result<DeviationReport> {
+        let target_snapshot = snapshot::load_from_file(snapshot_path)?;
+        let current_schema = self.current_schema()?;
+        let db_snapshot = introspection::create_snapshot_from_db(db.clone()).await?;
+
+        let schema_diff = self.diff(&target_snapshot, &current_schema)?;
+        let db_diff = self.diff(&db_snapshot, &target_snapshot)?;
+
+        Ok(DeviationReport {
+            db_deviations: if !db_diff.is_empty() { Some(db_diff) } else { None },
+            schema_deviations: if !schema_diff.is_empty() { Some(schema_diff) } else { None },
+            action: MigrationAction::Skip,
+        })
+    }
+
+    pub async fn apply_migration(
+        &self,
+        db: &SurrealDB,
+        snapshot_name: Option<String>,
+    ) -> Result<()> {
+        let snapshot_path = match snapshot_name {
+            Some(name) => self.migrations_dir.join(format!("{}_schema.json", name)),
+            None => {
+                // Create new snapshot if none specified
+                let (path, _) = self.create_snapshot(Some(db.clone()), None).await?;
+                path
+            }
+        };
+
+        // Check for deviations
+        let report = self.check_deviations(db, &snapshot_path).await?;
+        
+        if report.schema_deviations.is_some() || report.db_deviations.is_some() {
+            tracing::warn!("Found deviations in schema or database state");
+            if let Some(schema_diff) = &report.schema_deviations {
+                tracing::warn!("Schema deviations:\n{}", schema_diff.join("\n"));
+            }
+            if let Some(db_diff) = &report.db_deviations {
+                tracing::warn!("Database deviations:\n{}", db_diff.join("\n"));
+            }
+            // Note: In CLI this would prompt for user input
+            // For library usage, we'll need to expose this information
+            return Ok(());
+        }
+
+        // Load and apply the snapshot
+        let snapshot = snapshot::load_from_file(&snapshot_path)?;
+        let (_validated_snapshot, statements) = self.generate_snapshot_diff(Some(db.clone()), &snapshot).await?;
+
+        if !statements.is_empty() {
+            let mut transaction = Query::begin();
+            for stmt in statements {
+                transaction = transaction.raw(&stmt);
+            }
+            transaction.commit().execute(db).await.map_err(Error::from)?;
+        }
 
         Ok(())
     }
+
+    /// Rolls back the schema to a previous version.
+    /// 
+    /// This method reverts the schema to a specified snapshot version. If no
+    /// specific version is provided, it rolls back to the previous version.
+    /// 
+    /// # Arguments
+    /// 
+    /// * `db` - Database connection to apply the rollback
+    /// * `snapshot_name` - Optional specific snapshot to roll back to
+    pub async fn rollback(
+        &self,
+        db: &SurrealDB,
+        snapshot_name: Option<String>,
+    ) -> Result<()> {
+        // Get latest migration if none specified
+        let target_path = match snapshot_name {
+            Some(name) => self.migrations_dir.join(format!("{}_schema.json", name)),
+            None => {
+                let (path, _) = self.latest()?.ok_or_else(|| {
+                    Error::from(anyhow::anyhow!("No migrations found to rollback to"))
+                })?;
+                path
+            }
+        };
+
+        // Load snapshots
+        let target_snapshot = snapshot::load_from_file(&target_path)?;
+        let db_snapshot = introspection::create_snapshot_from_db(db.clone()).await?;
+        
+        let mut statements = Vec::new();
+        
+        // First, handle tables that exist in DB but not in target
+        for (table_name, _) in &db_snapshot.tables {
+            if !target_snapshot.tables.contains_key(table_name) {
+                statements.push(format!("REMOVE TABLE {};", table_name));
+            }
+        }
+
+        // Then handle tables that exist in both or only in target
+        for (table_name, target_table) in &target_snapshot.tables {
+            if let Some(db_table) = db_snapshot.tables.get(table_name) {
+                // Table exists in both - first remove fields that don't exist in target
+                for field in db_table.fields.keys() {
+                    if !target_table.fields.contains_key(field) {
+                        statements.push(format!("REMOVE FIELD {} ON TABLE {};", field, table_name));
+                    }
+                }
+                
+                // Remove indexes that don't exist in target
+                for index in db_table.indexes.keys() {
+                    if !target_table.indexes.contains_key(index) {
+                        statements.push(format!("REMOVE INDEX {} ON TABLE {};", index, table_name));
+                    }
+                }
+                
+                // Remove events that don't exist in target
+                for event in db_table.events.keys() {
+                    if !target_table.events.contains_key(event) {
+                        statements.push(format!("REMOVE EVENT {} ON TABLE {};", event, table_name));
+                    }
+                }
+            }
+            
+            // Now define/redefine the table
+            statements.push(ensure_overwrite(&target_table.define_table_statement));
+            
+            // Add/update fields in target schema
+            for (field_name, stmt) in &target_table.fields {
+                if let Some(db_table) = db_snapshot.tables.get(table_name) {
+                    if let Some(db_field) = db_table.fields.get(field_name) {
+                        if db_field != stmt {
+                            statements.push(ensure_overwrite(stmt));
+                        }
+                    } else {
+                        statements.push(ensure_overwrite(stmt));
+                    }
+                } else {
+                    statements.push(ensure_overwrite(stmt));
+                }
+            }
+            
+            // Add/update indexes in target schema
+            for (index_name, stmt) in &target_table.indexes {
+                if let Some(db_table) = db_snapshot.tables.get(table_name) {
+                    if let Some(db_index) = db_table.indexes.get(index_name) {
+                        if db_index != stmt {
+                            statements.push(ensure_overwrite(stmt));
+                        }
+                    } else {
+                        statements.push(ensure_overwrite(stmt));
+                    }
+                } else {
+                    statements.push(ensure_overwrite(stmt));
+                }
+            }
+            
+            // Add/update events in target schema
+            for (event_name, stmt) in &target_table.events {
+                if let Some(db_table) = db_snapshot.tables.get(table_name) {
+                    if let Some(db_event) = db_table.events.get(event_name) {
+                        if db_event != stmt {
+                            statements.push(ensure_overwrite(stmt));
+                        }
+                    } else {
+                        statements.push(ensure_overwrite(stmt));
+                    }
+                } else {
+                    statements.push(ensure_overwrite(stmt));
+                }
+            }
+        }
+
+        if !statements.is_empty() {
+            let mut transaction = Query::begin();
+            for stmt in statements {
+                transaction = transaction.raw(&stmt);
+            }
+            transaction.commit().execute(db).await.map_err(Error::from)?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Represents possible actions to take when applying migrations.
+#[derive(Debug)]
+pub enum MigrationAction {
+    /// Apply the migration normally
+    Apply,
+    /// Override existing schema with the migration
+    Override,
+    /// Skip this migration
+    Skip,
+}
+
+/// Report of schema deviations found during migration.
+#[derive(Debug)]
+pub struct DeviationReport {
+    /// Deviations found in the database schema
+    pub db_deviations: Option<Vec<String>>,
+    /// Deviations found in the migration schema
+    pub schema_deviations: Option<Vec<String>>,
+    /// Action to take based on the deviations
+    pub action: MigrationAction,
 }

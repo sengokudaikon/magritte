@@ -1,7 +1,7 @@
 #![allow(unused)]
-use super::Result;
+use super::{Diff, Result};
 use crate::ensure_overwrite;
-use magritte::EdgeSnapshot;
+use magritte::{EdgeSnapshot, Snapshot};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::event;
@@ -171,8 +171,8 @@ impl EdgeDiff {
     }
 }
 
-impl EdgeDiff {
-    pub fn from_snapshots(old_edge: &EdgeSnapshot, new_edge: &EdgeSnapshot) -> Result<Self> {
+impl Diff<EdgeSnapshot> for EdgeDiff {
+    fn from_snapshots(old_edge: &EdgeSnapshot, new_edge: &EdgeSnapshot) -> Result<Self> {
         let mut diff = EdgeDiff::new(
             Some(old_edge.define_edge_statement.clone()),
             Some(new_edge.define_edge_statement.clone()),
@@ -242,7 +242,7 @@ impl EdgeDiff {
         Ok(diff)
     }
 
-    pub fn to_snapshot(&self) -> anyhow::Result<EdgeSnapshot> {
+    fn to_snapshot(&self) -> crate::Result<EdgeSnapshot> {
         let mut snapshot = EdgeSnapshot::new(self.name.clone(), self.current.clone());
 
         // Add all fields that weren't removed and were either added or modified

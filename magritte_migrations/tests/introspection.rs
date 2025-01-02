@@ -1,4 +1,4 @@
-use magritte::{Query, SchemaSnapshot, SurrealDB, TableSnapshot, TableTrait};
+use magritte::{Query, SchemaSnapshot, Snapshot, SurrealDB, TableSnapshot, TableTrait};
 use magritte_migrations::introspection::{get_db_info, validate_migration};
 use magritte_migrations::test_models::UserV1;
 use std::collections::HashMap;

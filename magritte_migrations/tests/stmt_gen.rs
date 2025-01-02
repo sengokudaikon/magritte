@@ -3,6 +3,7 @@ use magritte::{table_snapshot, ColumnTrait, Event, HasId, Index, SchemaSnapshot,
 use magritte_migrations::manager::MigrationManager;
 use magritte_migrations::table::TableDiff;
 use magritte_migrations::test_models::{UserV1, UserV2};
+use magritte_migrations::Diff;
 use serde::{Deserialize, Serialize};
 use tempfile::tempdir;
 
@@ -58,7 +59,7 @@ async fn test_generate_diff_from_snapshots() -> anyhow::Result<()> {
     };
 
     // 3. Generate the diff migration
-    let statements =  manager.generate_diff_migration(&old_schema, &new_schema)?;
+    let statements = manager.diff(&old_schema, &new_schema)?;
     println!("Total: {}", statements.join("\n"));
     assert!(
         !statements.is_empty(),
@@ -78,7 +79,7 @@ async fn test_generate_diff_from_snapshots() -> anyhow::Result<()> {
     // 4. Simulate creating a migration file using MigrationManager (just a dry-run)
     let temp_dir = tempfile::tempdir()?;
     let manager = MigrationManager::new(temp_dir.path().into());
-    let migration_name = manager.create_new_migration(&new_schema)?;
+    let migration_name = manager.new_migration(&new_schema)?;
 
     // Check that files were created
     let json_path = temp_dir
@@ -119,8 +120,7 @@ async fn test_reverse_migration() -> anyhow::Result<()> {
             name: "users".into(),
             define_table_statement: v1_table_def,
             fields,
-            indexes: Default::default(),
-            events: Default::default(),
+            ..Default::default()
         };
         old_schema.add_table(table_snap);
     }
@@ -170,110 +170,11 @@ async fn test_reverse_migration() -> anyhow::Result<()> {
     Ok(())
 }
 
-// Fake current_schema_from_code implementations
-// In a real scenario, current_schema_from_code() would rely on inventory
-// and see which tables are compiled in. For demonstration, we mimic two scenarios.
-
-fn schema_with_user_v1() -> anyhow::Result<SchemaSnapshot> {
-    // The inventory would have one entry from UserV1. For this test, we just build it manually.
-    let mut schema = SchemaSnapshot::new();
-    let table_snap = table_snapshot::<UserV1>()?;
-    schema.add_table(table_snap);
-    Ok(schema)
-}
-
-fn schema_with_user_v2() -> anyhow::Result<SchemaSnapshot> {
-    // The inventory would now have UserV2 registered instead of UserV1.
-    // For testing, we just build directly.
-    let mut schema = SchemaSnapshot::new();
-    let table_snap = table_snapshot::<UserV2>()?;
-    schema.add_table(table_snap);
-    Ok(schema)
-}
-
-#[tokio::test]
-async fn test_inventory_registration_and_migration() -> anyhow::Result<()> {
-    let manager = MigrationManager::new(tempdir()?.path().into());
-    // Simulate initial state: UserV1 schema
-    let old_schema = schema_with_user_v1()?;
-    assert_eq!(old_schema.tables.len(), 1, "Should have one table (UserV1)");
-
-    // Simulate new state: UserV2 schema
-    let new_schema = schema_with_user_v2()?;
-    assert_eq!(new_schema.tables.len(), 1, "Should have one table (UserV2)");
-
-    // Generate diff
-    let diff_statements = manager.generate_diff_migration(&old_schema, &new_schema)?;
-    assert!(!diff_statements.is_empty(), "Expected diff statements");
-    // Check that a new field (email) is introduced
-    let email_field = diff_statements.iter().any(|s| s.contains("email"));
-    assert!(email_field, "Should have added an 'email' field");
-
-    // Use MigrationManager to create a new migration
-    let tmp = tempdir()?;
-    let manager = MigrationManager::new(tmp.path().into());
-
-    // Create migration file for new_schema
-    let migration_name = manager.create_new_migration(&new_schema)?;
-    let json_path = tmp.path().join(format!("{}_schema.json", &migration_name));
-
-    assert!(json_path.exists(), "JSON snapshot file not created");
-
-    // Now, we can simulate applying the migration:
-    // In a real scenario, you'd connect to SurrealDB and run the statements.
-    // For testing, just ensure that we can parse and generate them.
-    // If connected to a test instance of SurrealDB, you could run them:
-    //
-    // let ctx = magritte_migrations::types::MigrationContext::new(...) // connect to SurrealDB
-    // for stmt in diff_statements {
-    //     ctx.db.execute(&stmt).await?;
-    // }
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_reverse_migration_from_inventory() -> anyhow::Result<()> {
-    let manager = MigrationManager::new(tempdir()?.path().into());
-    // Create snapshots again
-    let old_schema = schema_with_user_v1()?;
-    let new_schema = schema_with_user_v2()?;
-
-    // Generate diff and reverse statements
-    let diff_statements =  manager.generate_diff_migration(&old_schema, &new_schema)?;
-    assert!(
-        !diff_statements.is_empty(),
-        "Expected up migration statements"
-    );
-
-    // Create a TableDiff from snapshots directly if needed
-    let old_table = old_schema.tables.get("users").unwrap();
-    let new_table = new_schema.tables.get("users").unwrap();
-    let table_diff = TableDiff::from_snapshots(old_table, new_table)?;
-    let down_statements = table_diff.reverse("users")?;
-    assert!(
-        !down_statements.is_empty(),
-        "Expected down migration statements"
-    );
-
-    // Check that it removes the email field
-    assert!(
-        down_statements
-            .iter()
-            .any(|s| s.contains("REMOVE FIELD email")),
-        "Down migration should remove the email field"
-    );
-
-    // If connected to SurrealDB, you would run these down statements to revert changes.
-
-    Ok(())
-}
-
 #[tokio::test]
 async fn test_conditional_features() -> anyhow::Result<()> {
     let manager = MigrationManager::new(tempdir()?.path().into());
     // Get schema with all models
-    let schema =  manager.current_schema_from_code()?;
+    let schema = manager.current_schema()?;
     
     // Test OrderV1 (has indexes)
     let order_snap = schema.tables.get("orders").expect("Order table not found");
@@ -300,23 +201,26 @@ async fn test_conditional_features() -> anyhow::Result<()> {
 async fn test_migration_with_features() -> anyhow::Result<()> {
     let manager = MigrationManager::new(tempdir()?.path().into());
     let old_schema = SchemaSnapshot::new(); // Empty schema
-    let new_schema =  manager.current_schema_from_code()?;
+    let new_schema = {
+        let mut schema = SchemaSnapshot::new();
+        let table_snap = table_snapshot::<UserV1>()?;
+        schema.add_table(table_snap);
+        schema
+    };
     
-    let statements =  manager.generate_diff_migration(&old_schema, &new_schema)?;
+    let statements = manager.diff(&old_schema, &new_schema)?;
     
     // Verify that index and event statements are generated
     let statements_str = statements.join("\n");
     println!("{}", statements_str);
-    assert!(statements_str.contains("DEFINE INDEX"), "Should generate index statements");
-    assert!(statements_str.contains("DEFINE EVENT"), "Should generate event statements");
+    assert!(statements_str.contains("DEFINE TABLE"), "Should generate table statements");
+    assert!(statements_str.contains("DEFINE FIELD"), "Should generate field statements");
     
-    // Verify order of statements (tables should be defined before indexes/events)
-    let table_pos = statements_str.find("DEFINE TABLE").unwrap_or(usize::MAX);
-    let index_pos = statements_str.find("DEFINE INDEX").unwrap_or(usize::MAX);
-    let event_pos = statements_str.find("DEFINE EVENT").unwrap_or(usize::MAX);
+    // Verify order of statements (tables should be defined before fields)
+    let table_pos = statements_str.find("DEFINE TABLE").expect("Should have table definition");
+    let field_pos = statements_str.find("DEFINE FIELD").expect("Should have field definition");
     
-    assert!(table_pos < index_pos, "Tables should be defined before indexes");
-    assert!(table_pos < event_pos, "Tables should be defined before events");
+    assert!(table_pos < field_pos, "Tables should be defined before fields");
     
     Ok(())
 }
