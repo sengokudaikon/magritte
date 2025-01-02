@@ -1,7 +1,7 @@
 use crate::error::Result;
 use magritte::{DbInfo, Query, SchemaSnapshot, SurrealDB, TableInfo, TableSnapshot};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ValidationReport {
     pub mismatches: Vec<String>,
     pub missing: Vec<String>,
@@ -10,11 +10,7 @@ pub struct ValidationReport {
 
 impl ValidationReport {
     pub fn new() -> Self {
-        Self {
-            mismatches: Vec::new(),
-            missing: Vec::new(),
-            unexpected: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn has_issues(&self) -> bool {
@@ -31,7 +27,7 @@ pub async fn get_db_info(db: SurrealDB) -> Result<DbInfo> {
 
 pub async fn get_table_info(db: SurrealDB, table: &str) -> Result<TableInfo> {
     Ok(Query::info(db)
-        .info_table(table, false)
+        .info_table(table)
         .await
         .map_err(anyhow::Error::from)?)
 }

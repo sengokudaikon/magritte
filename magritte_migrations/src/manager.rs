@@ -1,11 +1,15 @@
-use std::collections::HashMap;
 use super::{introspection, snapshot, Error, Result};
-use crate::types::FlexibleDateTime;
-use magritte::{EdgeRegistration, EventRegistration, IndexRegistration, Query, SchemaSnapshot, SurrealDB, TableRegistration, TableSnapshot};
-use std::path::PathBuf;
 use crate::edge::EdgeDiff;
 use crate::snapshot::save_to_file;
 use crate::table::TableDiff;
+use crate::types::FlexibleDateTime;
+use magritte::{
+    EdgeRegistration, EventRegistration, IndexRegistration, Query, SchemaSnapshot, SurrealDB,
+    TableRegistration,
+};
+use std::path::PathBuf;
+use tracing::debug;
+
 pub struct MigrationManager {
     pub migrations_dir: PathBuf,
 }
@@ -15,7 +19,7 @@ impl MigrationManager {
         Self { migrations_dir }
     }
 
-    pub fn current_schema_from_code() -> Result<SchemaSnapshot> {
+    pub fn current_schema_from_code(&self) -> Result<SchemaSnapshot> {
         let mut schema = SchemaSnapshot::new();
 
         // Process tables
@@ -23,8 +27,8 @@ impl MigrationManager {
             // First get basic table snapshot
             let mut table_snap = (reg.builder)().map_err(Error::from)?;
             for event_reg in inventory::iter::<EventRegistration> {
-                if event_reg.parent_type == reg.type_id {
-                    for event_def in event_reg.event_defs {
+                if event_reg.type_id == reg.type_id {
+                    for event_def in (event_reg.builder)() {
                         table_snap.add_event(event_def.event_name().into(), event_def.to_statement()?.build().map_err(anyhow::Error::from)?);
                     }
                 }
@@ -32,8 +36,8 @@ impl MigrationManager {
 
             // Find any registered indexes for this table
             for index_reg in inventory::iter::<IndexRegistration> {
-                if index_reg.parent_type == reg.type_id {
-                    for index_def in index_reg.index_defs {
+                if index_reg.type_id == reg.type_id {
+                    for index_def in (index_reg.builder)() {
                         table_snap.add_index(index_def.index_name().into(), index_def.to_statement().to_string());
                     }
                 }
@@ -45,8 +49,8 @@ impl MigrationManager {
         for reg in inventory::iter::<EdgeRegistration> {
             let mut edge_snap = (reg.builder)().map_err(Error::from)?;
             for event_reg in inventory::iter::<EventRegistration> {
-                if event_reg.parent_type == reg.type_id {
-                    for event_def in event_reg.event_defs {
+                if event_reg.type_id == reg.type_id {
+                    for event_def in (event_reg.builder)() {
                         edge_snap.add_event(event_def.event_name().into(), event_def.to_statement()?.build().map_err(anyhow::Error::from)?);
                     }
                 }
@@ -54,8 +58,8 @@ impl MigrationManager {
 
             // Find any registered indexes for this table
             for index_reg in inventory::iter::<IndexRegistration> {
-                if index_reg.parent_type == reg.type_id {
-                    for index_def in index_reg.index_defs {
+                if index_reg.type_id == reg.type_id {
+                    for index_def in (index_reg.builder)() {
                         edge_snap.add_index(index_def.index_name().into(), index_def.to_statement().to_string());
                     }
                 }
@@ -73,7 +77,9 @@ impl MigrationManager {
             .unwrap()
     }
 
+    //noinspection RsTraitObligations
     pub fn generate_diff_migration(
+        &self,
         old_snapshot: &SchemaSnapshot,
         new_snapshot: &SchemaSnapshot,
     ) -> Result<Vec<String>> {
@@ -84,6 +90,7 @@ impl MigrationManager {
             if let Some(old_table) = old_snapshot.tables.get(table_name) {
                 // Build TableDiff
                 let diff = TableDiff::from_snapshots(old_table, new_table)?;
+
                 let up_stmts = diff.generate_statements(table_name)?;
                 statements.extend(up_stmts);
             } else {
@@ -167,6 +174,17 @@ impl MigrationManager {
         Ok(statements)
     }
 
+    pub fn create_empty_migration(&self) -> Result<String> {
+        let timestamp = Self::get_current_timestamp();
+        let migration_name = format!("{:04}_{}", 0, timestamp);
+        let json_path = self
+            .migrations_dir
+            .join(format!("{}_schema.json", &migration_name));
+        save_to_file(&SchemaSnapshot::new(), &json_path)?;
+
+        Ok(migration_name)
+    }
+
     pub fn create_new_migration(&self, snapshot: &SchemaSnapshot) -> Result<String> {
         // Determine the next migration number based on existing files
         let next_number = self.next_migration_number()?;
@@ -176,7 +194,7 @@ impl MigrationManager {
         let json_path = self
             .migrations_dir
             .join(format!("{}_schema.json", &migration_name));
-        save_to_file(&snapshot, &json_path)?;
+        save_to_file(snapshot, &json_path)?;
 
         Ok(migration_name)
     }
@@ -206,6 +224,7 @@ impl MigrationManager {
     }
 
     pub async fn generate_migration_with_db_check(
+        &self,
         db: SurrealDB,
         stored_snapshot: &SchemaSnapshot,
         code_snapshot: &SchemaSnapshot,
@@ -216,7 +235,10 @@ impl MigrationManager {
         // 2. Compare DB state with stored snapshot to detect drift
         let validation = introspection::validate_migration(db.clone(), stored_snapshot).await?;
         if validation.has_issues() {
-            tracing::warn!("Database state has drifted from stored snapshot: {:?}", validation);
+            tracing::warn!(
+                "Database state has drifted from stored snapshot: {:?}",
+                validation
+            );
         }
 
         let mut schema = SchemaSnapshot::new();
@@ -253,21 +275,26 @@ impl MigrationManager {
 
     pub async fn apply_migration(&self, db: &SurrealDB, migration_name: &str) -> Result<()> {
         // Load the diff
-        let diff_path = self.migrations_dir
-            .join(format!("{}.json", migration_name));
+        let diff_path = self.migrations_dir.join(format!("{}_schema.json", migration_name));
         let stored_snapshot = snapshot::load_from_file(&diff_path)?;
-        let code_snapshot = Self::current_schema_from_code()?;
-        let validated_snapshot = Self::generate_migration_with_db_check(
-            db.clone(),
-            &stored_snapshot,
-            &code_snapshot,
-        ).await?;
-        let statements = Self::generate_diff_migration(&stored_snapshot, &validated_snapshot)?;
+
+        let code_snapshot = self.current_schema_from_code()?;
+        let validated_snapshot =
+            self.generate_migration_with_db_check(db.clone(), &stored_snapshot, &code_snapshot)
+                .await?;
+
+        let statements = self.generate_diff_migration(&stored_snapshot, &validated_snapshot)?;
+
         let mut transaction = Query::begin();
         for stmt in statements {
             transaction = transaction.raw(&stmt);
         }
-        transaction.commit().execute(db).await.map_err(anyhow::Error::from)?;
+        debug!("Final trn: {}", transaction.clone().commit().build());
+        transaction
+            .commit()
+            .execute(db)
+            .await
+            .map_err(anyhow::Error::from)?;
 
         Ok(())
     }

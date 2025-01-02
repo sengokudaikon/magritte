@@ -16,10 +16,15 @@ pub(crate) fn ensure_overwrite(stmt: &str) -> String {
     if stmt.contains("IF NOT EXISTS") {
         stmt.replace("IF NOT EXISTS", "OVERWRITE")
     } else if !stmt.contains("OVERWRITE") {
-        // Insert OVERWRITE after the first DEFINE keyword
-        let mut parts = stmt.splitn(2, "DEFINE");
-        let after_define = parts.nth(1).unwrap_or("");
-        format!("DEFINE OVERWRITE{}", after_define)
+        // Split into parts: DEFINE <TYPE> <NAME>
+        let parts: Vec<&str> = stmt.split_whitespace().collect();
+        if parts.len() >= 3 && parts[0] == "DEFINE" {
+            let def_type = parts[1]; // TABLE, FIELD, etc.
+            let rest: Vec<&str> = parts[2..].to_vec();
+            format!("DEFINE {} OVERWRITE {}", def_type, rest.join(" "))
+        } else {
+            stmt.to_string()
+        }
     } else {
         stmt.to_string()
     }
@@ -27,7 +32,38 @@ pub(crate) fn ensure_overwrite(stmt: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::manager::MigrationManager;
+
+    #[test]
+    fn test_ensure_overwrite() {
+        let cases = vec![
+            (
+                "DEFINE TABLE test TYPE NORMAL SCHEMAFULL",
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL SCHEMAFULL"
+            ),
+            (
+                "DEFINE FIELD title ON TABLE test TYPE string",
+                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string"
+            ),
+            (
+                "DEFINE TABLE IF NOT EXISTS test TYPE NORMAL",
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL"
+            ),
+            (
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL",
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL"
+            ),
+            (
+                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string",
+                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string"
+            ),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(ensure_overwrite(input), expected, "Failed for input: {}", input);
+        }
+    }
 
     #[test]
     fn test_get_file_stem() {

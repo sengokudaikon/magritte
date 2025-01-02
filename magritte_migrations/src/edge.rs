@@ -1,10 +1,12 @@
+#![allow(unused)]
 use super::Result;
 use crate::ensure_overwrite;
-use magritte::{EdgeSnapshot, TableSnapshot};
+use magritte::EdgeSnapshot;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::event;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EdgeDiff {
     pub name: String,
     pub previous: Option<String>,
@@ -19,24 +21,7 @@ pub struct EdgeDiff {
     pub removed_events: HashMap<String, String>,
     pub modified_events: HashMap<String, (String, String)>,
 }
-impl Default for EdgeDiff {
-    fn default() -> Self {
-        Self {
-            name: Default::default(),
-            previous: Default::default(),
-            current: Default::default(),
-            added_columns: HashMap::new(),
-            removed_columns: HashMap::new(),
-            modified_columns: HashMap::new(),
-            added_indexes: HashMap::new(),
-            removed_indexes: HashMap::new(),
-            modified_indexes: HashMap::new(),
-            added_events: HashMap::new(),
-            removed_events: HashMap::new(),
-            modified_events: HashMap::new(),
-        }
-    }
-}
+
 impl EdgeDiff {
     pub fn new(previous: Option<String>, current: Option<String>) -> Self {
         match (current, previous) {
@@ -57,8 +42,10 @@ impl EdgeDiff {
     pub fn generate_statements(&self, edge_name: &str) -> Result<Vec<String>> {
         let mut statements = Vec::new();
 
-        // Table definition (ensure OVERWRITE is present)
-        statements.push(ensure_overwrite(&self.current));
+        // Only include edge definition if this is a new edge (no previous definition)
+        if self.previous.is_none() {
+            statements.push(ensure_overwrite(&self.current));
+        }
 
         // Add new columns
         statements.extend(
@@ -103,17 +90,17 @@ impl EdgeDiff {
         );
 
         // Remove columns that no longer exist
-        for (column, _) in &self.removed_columns {
+        for column in self.removed_columns.keys() {
             statements.push(format!("REMOVE FIELD {} ON TABLE {};", column, edge_name));
         }
 
         // Remove indexes that no longer exist
-        for (index, _) in &self.removed_indexes {
+        for index in self.removed_indexes.keys() {
             statements.push(format!("REMOVE INDEX {} ON TABLE {};", index, edge_name));
         }
 
         // Remove events that no longer exist
-        for (event, _) in &self.removed_events {
+        for event in self.removed_events.keys() {
             statements.push(format!("REMOVE EVENT {} ON TABLE {};", event, edge_name));
         }
 
@@ -124,20 +111,17 @@ impl EdgeDiff {
         let mut statements = Vec::new();
 
         // Table definition (ensure OVERWRITE is present)
-        statements.push(ensure_overwrite(&self.previous.as_ref().unwrap()));
+        statements.push(ensure_overwrite(self.previous.as_ref().unwrap()));
 
-        let removed_columns = self.added_columns.clone();
-        for (column, _) in &removed_columns {
+        for column in self.added_columns.keys() {
             statements.push(format!("REMOVE FIELD {} ON TABLE {};", column, edge_name));
         }
 
-        let removed_indexes = self.added_indexes.clone();
-        for (index, _) in &removed_indexes {
+        for index in self.added_indexes.keys() {
             statements.push(format!("REMOVE INDEX {} ON TABLE {};", index, edge_name));
         }
 
-        let removed_events = self.added_events.clone();
-        for (event, _) in &removed_events {
+        for event in self.added_events.keys() {
             statements.push(format!("REMOVE EVENT {} ON TABLE {};", event, edge_name));
         }
 

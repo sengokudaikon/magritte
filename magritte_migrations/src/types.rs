@@ -134,7 +134,7 @@ pub enum MigrationStatus {
 }
 
 #[derive(Clone, Serialize, Deserialize, Table)]
-#[table(name = "_migrations", if_not_exists)]
+#[table(name = "migrations", if_not_exists)]
 pub struct MigrationRecord {
     pub id: SurrealId<Self>,
     pub name: String,     // Human readable name

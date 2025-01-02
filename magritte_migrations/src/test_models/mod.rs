@@ -112,6 +112,7 @@ pub struct OrderV1 {
     #[column(type = "any")]
     metadata: serde_json::Value,
     status: String,
+    #[column(type="record<products>")]
     product: RecordRef<ProductV1>
 }
 

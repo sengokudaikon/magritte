@@ -1,9 +1,11 @@
+#![allow(unused)]
 use crate::ensure_overwrite;
 use magritte::TableSnapshot;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use tracing::event;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TableDiff {
     pub name: String,
     pub previous: Option<String>,
@@ -17,25 +19,6 @@ pub struct TableDiff {
     pub added_events: HashMap<String, String>,
     pub removed_events: HashMap<String, String>,
     pub modified_events: HashMap<String, (String, String)>,
-}
-
-impl Default for TableDiff {
-    fn default() -> Self {
-        Self {
-            name: Default::default(),
-            previous: Default::default(),
-            current: Default::default(),
-            added_columns: HashMap::new(),
-            removed_columns: HashMap::new(),
-            modified_columns: HashMap::new(),
-            added_indexes: HashMap::new(),
-            removed_indexes: HashMap::new(),
-            modified_indexes: HashMap::new(),
-            added_events: HashMap::new(),
-            removed_events: HashMap::new(),
-            modified_events: HashMap::new(),
-        }
-    }
 }
 
 impl TableDiff {
@@ -58,8 +41,10 @@ impl TableDiff {
     pub fn generate_statements(&self, table_name: &str) -> anyhow::Result<Vec<String>> {
         let mut statements = Vec::new();
 
-        // Table definition (ensure OVERWRITE is present)
-        statements.push(ensure_overwrite(&self.current));
+        // Only include table definition if this is a new table (no previous definition)
+        if self.previous.is_none() {
+            statements.push(ensure_overwrite(&self.current));
+        }
 
         // Add new columns
         statements.extend(
@@ -104,17 +89,17 @@ impl TableDiff {
         );
 
         // Remove columns that no longer exist
-        for (column, _) in &self.removed_columns {
+        for column in self.removed_columns.keys() {
             statements.push(format!("REMOVE FIELD {} ON TABLE {};", column, table_name));
         }
 
         // Remove indexes that no longer exist
-        for (index, _) in &self.removed_indexes {
+        for index in self.removed_indexes.keys() {
             statements.push(format!("REMOVE INDEX {} ON TABLE {};", index, table_name));
         }
 
         // Remove events that no longer exist
-        for (event, _) in &self.removed_events {
+        for event in self.removed_events.keys() {
             statements.push(format!("REMOVE EVENT {} ON TABLE {};", event, table_name));
         }
 
@@ -125,20 +110,17 @@ impl TableDiff {
         let mut statements = Vec::new();
 
         // Table definition (ensure OVERWRITE is present)
-        statements.push(ensure_overwrite(&self.previous.as_ref().unwrap()));
+        statements.push(ensure_overwrite(self.previous.as_ref().unwrap()));
 
-        let removed_columns = self.added_columns.clone();
-        for (column, _) in &removed_columns {
+        for column in self.added_columns.keys() {
             statements.push(format!("REMOVE FIELD {} ON TABLE {};", column, table_name));
         }
 
-        let removed_indexes = self.added_indexes.clone();
-        for (index, _) in &removed_indexes {
+        for index in self.added_indexes.keys() {
             statements.push(format!("REMOVE INDEX {} ON TABLE {};", index, table_name));
         }
 
-        let removed_events = self.added_events.clone();
-        for (event, _) in &removed_events {
+        for event in self.added_events.keys() {
             statements.push(format!("REMOVE EVENT {} ON TABLE {};", event, table_name));
         }
 

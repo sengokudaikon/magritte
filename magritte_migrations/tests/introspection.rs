@@ -1,11 +1,16 @@
-use std::collections::HashMap;
-use anyhow::anyhow;
-use magritte::{Query, SchemaSnapshot, TableSnapshot, TableTrait};
+use magritte::{Query, SchemaSnapshot, SurrealDB, TableSnapshot, TableTrait};
 use magritte_migrations::introspection::{get_db_info, validate_migration};
-use super::*;
-use magritte::test_util::test_db;
 use magritte_migrations::test_models::UserV1;
+use std::collections::HashMap;
+use std::sync::Arc;
+use surrealdb::engine::any::{connect, Any};
+use surrealdb::Surreal;
 
+async fn test_db() -> anyhow::Result<SurrealDB> {
+    let db: Surreal<Any> = connect("mem://").await?;
+    db.use_ns("test").use_db("test").await?;
+    Ok(Arc::new(db))
+}
 #[tokio::test]
 async fn test_get_db_info() -> anyhow::Result<()>{
     let db = test_db().await?;
@@ -41,7 +46,7 @@ async fn test_transaction_execution() -> anyhow::Result<()> {
     
     // Setup initial state with UserV1
     let table_stmt = <UserV1 as TableTrait>::to_statement().build().map_err(anyhow::Error::from)?;
-    Query::begin().raw(&table_stmt).execute(&db).await?;
+    Query::begin().raw(&table_stmt).commit().execute(&db).await?;
     
     // Try to apply invalid migration (should rollback)
     let mut transaction = Query::begin();
@@ -54,7 +59,7 @@ async fn test_transaction_execution() -> anyhow::Result<()> {
     assert!(result.is_err(), "Invalid transaction should fail");
     
     // Verify DB state is unchanged
-    let info = Query::info(db.clone()).info_table("users", false).await?;
+    let info = Query::info(db.clone()).info_table("users").await?;
     assert!(!info.fields.contains_key("invalid"), "Invalid field should not exist");
     
     Ok(())
@@ -74,13 +79,16 @@ async fn test_validation_with_events_and_indexes() -> anyhow::Result<()> {
     
     // Create expected schema
     let mut expected = SchemaSnapshot::new();
-    let mut table = TableSnapshot::new("test".into(), "DEFINE TABLE test SCHEMALESS".into());
+    let mut table = TableSnapshot::new("test".into(), "DEFINE TABLE test TYPE ANY SCHEMALESS PERMISSIONS NONE".into());
     table.add_index("idx_test".into(), "DEFINE INDEX idx_test ON test FIELDS name".into());
-    table.add_event("evt_test".into(), "DEFINE EVENT evt_test ON test WHEN $event = 'CREATE' THEN CREATE log:entry".into());
+    table.add_event("evt_test".into(), "DEFINE EVENT evt_test ON test WHEN $event = 'CREATE' THEN (CREATE log:entry)".into());
     expected.add_table(table);
     
     // Validate
     let report = validate_migration(db, &expected).await?;
+    println!("{}", report.missing.join("\n"));
+    println!("{}", report.mismatches.join("\n"));
+    println!("{}", report.unexpected.join("\n"));
     assert!(!report.has_issues(), "Validation should pass");
     
     Ok(())
