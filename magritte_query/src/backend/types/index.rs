@@ -1,6 +1,6 @@
+use crate::vector_search::{VectorDistance, VectorType};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use crate::vector_search::{VectorDistance, VectorType};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum IndexSpecifics {
@@ -32,14 +32,23 @@ impl From<&String> for IndexSpecifics {
             s if s.starts_with("SEARCH") => {
                 let mut parts = s.split_whitespace();
                 parts.next(); // Skip "SEARCH"
-                let analyzer = parts.find(|&part| part.starts_with("ANALYZER")).map(|s| s[9..].to_string());
+                let analyzer = parts
+                    .find(|&part| part.starts_with("ANALYZER"))
+                    .map(|s| s[9..].to_string());
                 let bm25 = parts.find(|&part| part.starts_with("BM25")).map(|s| {
-                    let nums: Vec<f32> = s[5..s.len() - 1].split(',').map(|n| n.trim().parse().unwrap()).collect();
+                    let nums: Vec<f32> = s[5..s.len() - 1]
+                        .split(',')
+                        .map(|n| n.trim().parse().unwrap())
+                        .collect();
                     (nums[0], nums[1])
                 });
                 let highlights = parts.any(|part| part == "HIGHLIGHTS");
-                IndexSpecifics::Search { analyzer, bm25, highlights }
-            },
+                IndexSpecifics::Search {
+                    analyzer,
+                    bm25,
+                    highlights,
+                }
+            }
             s if s.starts_with("MTREE") => {
                 let mut parts = s.split_whitespace();
                 parts.next(); // Skip "MTREE"
@@ -47,8 +56,13 @@ impl From<&String> for IndexSpecifics {
                 let vector_type = parts.next().and_then(|s| VectorType::from_str(s).ok());
                 let dist = VectorDistance::from_str(parts.next().unwrap()).unwrap();
                 let capacity = parts.next().and_then(|s| s.parse().ok());
-                IndexSpecifics::MTREE { dimension, vector_type, dist, capacity }
-            },
+                IndexSpecifics::MTREE {
+                    dimension,
+                    vector_type,
+                    dist,
+                    capacity,
+                }
+            }
             s if s.starts_with("HNSW") => {
                 let mut parts = s.split_whitespace();
                 parts.next(); // Skip "HNSW"
@@ -57,8 +71,14 @@ impl From<&String> for IndexSpecifics {
                 let dist = VectorDistance::from_str(parts.next().unwrap()).unwrap();
                 let efc = parts.next().and_then(|s| s.parse().ok());
                 let m = parts.next().and_then(|s| s.parse().ok());
-                IndexSpecifics::HNSW { dimension, vector_type, dist, efc, m }
-            },
+                IndexSpecifics::HNSW {
+                    dimension,
+                    vector_type,
+                    dist,
+                    efc,
+                    m,
+                }
+            }
             _ => IndexSpecifics::None, // Default case if pattern does not match
         }
     }
@@ -67,7 +87,11 @@ impl Display for IndexSpecifics {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, ""),
-            Self::Search { analyzer, bm25, highlights } => {
+            Self::Search {
+                analyzer,
+                bm25,
+                highlights,
+            } => {
                 let bm25 = if let Some(bm25) = bm25 {
                     format!("BM25({}, {})", bm25.0, bm25.1)
                 } else {
@@ -80,8 +104,13 @@ impl Display for IndexSpecifics {
                 };
                 let highlights = if *highlights { " HIGHLIGHTS" } else { "" };
                 write!(f, "SEARCH {} {} {}", &analyzer, &bm25, highlights)
-            },
-            Self::MTREE { dimension, vector_type, dist, capacity } => {
+            }
+            Self::MTREE {
+                dimension,
+                vector_type,
+                dist,
+                capacity,
+            } => {
                 let vector_type = if let Some(vector_type) = vector_type {
                     format!(" TYPE {}", vector_type)
                 } else {
@@ -93,10 +122,19 @@ impl Display for IndexSpecifics {
                 } else {
                     "".to_string()
                 };
-                write!(f, "MTREE DIMENSION {}{}{}{}", dimension, vector_type, dist, capacity)
-
-            },
-            Self::HNSW {dimension, vector_type, dist, efc, m } => {
+                write!(
+                    f,
+                    "MTREE DIMENSION {}{}{}{}",
+                    dimension, vector_type, dist, capacity
+                )
+            }
+            Self::HNSW {
+                dimension,
+                vector_type,
+                dist,
+                efc,
+                m,
+            } => {
                 let vector_type = if let Some(vector_type) = vector_type {
                     format!(" TYPE {}", vector_type)
                 } else {
@@ -113,7 +151,11 @@ impl Display for IndexSpecifics {
                 } else {
                     "".to_string()
                 };
-                write!(f, "HNSW DIMENSION {}{}{}{}{}", dimension, vector_type, dist, efc, m)
+                write!(
+                    f,
+                    "HNSW DIMENSION {}{}{}{}{}",
+                    dimension, vector_type, dist, efc, m
+                )
             }
         }
     }

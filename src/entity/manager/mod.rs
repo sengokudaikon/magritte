@@ -10,7 +10,7 @@ use crate::{
     ColumnTrait, EdgeTrait, HasColumns, HasId, HasRelations, NamedType, RecordType, RelationTrait,
     TableTrait,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use magritte_query::{HasId as _, Query, SurrealDB, SurrealId};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -18,7 +18,9 @@ use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::Arc;
+use surrealdb::Response;
 use tokio::sync::RwLock;
+use tracing::error;
 
 /// Type-safe container for entity state tracking
 #[derive(Default)]
@@ -341,12 +343,20 @@ impl EntityManager {
             Ok(r) => {
                 // On success, flush changes and build commit
                 self.flush().await?;
-                transaction
+                let res = transaction
                     .commit()
                     .execute(&self.db)
                     .await
-                    .map_err(anyhow::Error::from)?;
-                Ok(r)
+                    .map_err(anyhow::Error::from);
+                match res {
+                    Ok(ok) => {
+                        Ok(r)
+                    }
+                    Err(e) => {
+                        error!("Transaction commit failed: {}", e);
+                        Err(e)
+                    }
+                }
             }
             Err(e) => {
                 // On error, build rollback

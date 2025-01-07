@@ -1,9 +1,7 @@
 //! Query result types for SurrealDB queries
 
-use crate::types::{NamedType, RangeTarget, RecordType, SurrealId};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use serde_json::{to_string, Value};
+use crate::types::{RangeTarget, RecordType, SurrealId};
+use serde_json::Value;
 use std::fmt::{self, Debug, Display};
 
 /// Represents a query result or subquery specification
@@ -49,7 +47,7 @@ impl Display for QueryResult {
 #[derive(Clone, Debug, PartialEq)]
 pub enum FromTarget<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     /// A Table name
     Table(String),
@@ -66,12 +64,12 @@ where
 
 impl<T> Display for FromTarget<T>
 where
-    T: RecordType
+    T: RecordType,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FromTarget::Table(name) => write!(f, "{}", name),
-            FromTarget::Record(record_id) => write!(f, "{}", record_id.to_string()),
+            FromTarget::Record(record_id) => write!(f, "{}", record_id),
             FromTarget::RecordList(records) => {
                 write!(
                     f,

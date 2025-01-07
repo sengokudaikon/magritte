@@ -78,115 +78,81 @@ impl Display for TimeFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Ceil(dt, dur) => write!(f, "time::ceil({}, {})", dt, dur),
-            Self::Day(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::day({})", d),
-                    None => write!(f, "time::day()"),
-                }
-            }
+            Self::Day(dt) => match dt {
+                Some(d) => write!(f, "time::day({})", d),
+                None => write!(f, "time::day()"),
+            },
             Self::Floor(dt, dur) => write!(f, "time::floor({}, {})", dt, dur),
             Self::Format(dt, fmt) => write!(f, "time::format({}, {})", dt, fmt),
             Self::Group(dt, interval) => write!(f, "time::group({}, {})", dt, interval),
-            Self::Hour(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::hour({})", d),
-                    None => write!(f, "time::hour()"),
-                }
-            }
+            Self::Hour(dt) => match dt {
+                Some(d) => write!(f, "time::hour({})", d),
+                None => write!(f, "time::hour()"),
+            },
             Self::Max(arr) => write!(f, "time::max({})", arr),
-            Self::Micros(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::micros({})", d),
-                    None => write!(f, "time::micros()"),
-                }
-            }
-            Self::Millis(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::millis({})", d),
-                    None => write!(f, "time::millis()"),
-                }
-            }
+            Self::Micros(dt) => match dt {
+                Some(d) => write!(f, "time::micros({})", d),
+                None => write!(f, "time::micros()"),
+            },
+            Self::Millis(dt) => match dt {
+                Some(d) => write!(f, "time::millis({})", d),
+                None => write!(f, "time::millis()"),
+            },
             Self::Min(arr) => write!(f, "time::min({})", arr),
-            Self::Minute(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::minute({})", d),
-                    None => write!(f, "time::minute()"),
-                }
-            }
-            Self::Month(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::month({})", d),
-                    None => write!(f, "time::month()"),
-                }
-            }
+            Self::Minute(dt) => match dt {
+                Some(d) => write!(f, "time::minute({})", d),
+                None => write!(f, "time::minute()"),
+            },
+            Self::Month(dt) => match dt {
+                Some(d) => write!(f, "time::month({})", d),
+                None => write!(f, "time::month()"),
+            },
             Self::Now => write!(f, "time::now()"),
-            Self::Nanos(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::nanos({})", d),
-                    None => write!(f, "time::nanos()"),
-                }
-            }
+            Self::Nanos(dt) => match dt {
+                Some(d) => write!(f, "time::nanos({})", d),
+                None => write!(f, "time::nanos()"),
+            },
             Self::Round(dt, dur) => write!(f, "time::round({}, {})", dt, dur),
-            Self::Second(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::second({})", d),
-                    None => write!(f, "time::second()"),
-                }
-            }
-            Self::Timezone(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::timezone({})", d),
-                    None => write!(f, "time::timezone()"),
-                }
-            }
-            Self::UnixMicros(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::unix::micros({})", d),
-                    None => write!(f, "time::unix::micros()"),
-                }
-            }
-            Self::UnixMillis(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::unix::millis({})", d),
-                    None => write!(f, "time::unix::millis()"),
-                }
-            }
-            Self::UnixNanos(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::unix::nanos({})", d),
-                    None => write!(f, "time::unix::nanos()"),
-                }
-            }
-            Self::UnixSeconds(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::unix({})", d),
-                    None => write!(f, "time::unix()"),
-                }
-            }
-            Self::Wday(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::wday({})", d),
-                    None => write!(f, "time::wday()"),
-                }
-            }
-            Self::Week(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::week({})", d),
-                    None => write!(f, "time::week()"),
-                }
-            }
-            Self::Year(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::year({})", d),
-                    None => write!(f, "time::year()"),
-                }
-            }
-            Self::Yday(dt) => {
-                match dt {
-                    Some(d) => write!(f, "time::yday({})", d),
-                    None => write!(f, "time::yday()"),
-                }
-            }
+            Self::Second(dt) => match dt {
+                Some(d) => write!(f, "time::second({})", d),
+                None => write!(f, "time::second()"),
+            },
+            Self::Timezone(dt) => match dt {
+                Some(d) => write!(f, "time::timezone({})", d),
+                None => write!(f, "time::timezone()"),
+            },
+            Self::UnixMicros(dt) => match dt {
+                Some(d) => write!(f, "time::unix::micros({})", d),
+                None => write!(f, "time::unix::micros()"),
+            },
+            Self::UnixMillis(dt) => match dt {
+                Some(d) => write!(f, "time::unix::millis({})", d),
+                None => write!(f, "time::unix::millis()"),
+            },
+            Self::UnixNanos(dt) => match dt {
+                Some(d) => write!(f, "time::unix::nanos({})", d),
+                None => write!(f, "time::unix::nanos()"),
+            },
+            Self::UnixSeconds(dt) => match dt {
+                Some(d) => write!(f, "time::unix({})", d),
+                None => write!(f, "time::unix()"),
+            },
+            Self::Wday(dt) => match dt {
+                Some(d) => write!(f, "time::wday({})", d),
+                None => write!(f, "time::wday()"),
+            },
+            Self::Week(dt) => match dt {
+                Some(d) => write!(f, "time::week({})", d),
+                None => write!(f, "time::week()"),
+            },
+            Self::Year(dt) => match dt {
+                Some(d) => write!(f, "time::year({})", d),
+                None => write!(f, "time::year()"),
+            },
+            Self::Yday(dt) => match dt {
+                Some(d) => write!(f, "time::yday({})", d),
+                None => write!(f, "time::yday()"),
+            },
             Self::FromMicros(micros) => write!(f, "time::from::micros({})", micros),
             Self::FromMillis(millis) => write!(f, "time::from::millis({})", millis),
             Self::FromNanos(nanos) => write!(f, "time::from::nanos({})", nanos),
@@ -197,7 +163,9 @@ impl Display for TimeFunction {
 }
 
 impl Callable for TimeFunction {
-    fn namespace() -> &'static str { "time" }
+    fn namespace() -> &'static str {
+        "time"
+    }
 
     fn category(&self) -> &'static str {
         match self {
@@ -219,7 +187,10 @@ impl Callable for TimeFunction {
             Self::Micros(..) | Self::Millis(..) | Self::Nanos(..) => "precision",
 
             // Unix timestamps
-            Self::UnixMicros(..) | Self::UnixMillis(..) | Self::UnixNanos(..) | Self::UnixSeconds(..) => "unix",
+            Self::UnixMicros(..)
+            | Self::UnixMillis(..)
+            | Self::UnixNanos(..)
+            | Self::UnixSeconds(..) => "unix",
 
             // Time manipulation
             Self::Ceil(..) | Self::Floor(..) | Self::Round(..) => "rounding",

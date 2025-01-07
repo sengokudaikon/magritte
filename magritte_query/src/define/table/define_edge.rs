@@ -1,13 +1,9 @@
-use crate::{EdgeType, Permission, RecordType, SchemaType, SurrealDB, TableType};
+use crate::define_table::AsSelect;
+use crate::{EdgeType, Permission, SchemaType, SurrealDB, TableType};
 use anyhow::{anyhow, bail};
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
+use std::fmt::Display;
 use std::time::Duration;
 use tracing::{error, info};
-use crate::define_table::AsSelect;
 
 #[derive(Clone, Debug)]
 pub struct DefineEdgeStatement<T: EdgeType> {
@@ -26,7 +22,10 @@ pub struct DefineEdgeStatement<T: EdgeType> {
     _marker: std::marker::PhantomData<T>,
 }
 
-impl <T> Default for DefineEdgeStatement<T> where T: EdgeType {
+impl<T> Default for DefineEdgeStatement<T>
+where
+    T: EdgeType,
+{
     fn default() -> Self {
         Self {
             name: None,
@@ -46,7 +45,10 @@ impl <T> Default for DefineEdgeStatement<T> where T: EdgeType {
     }
 }
 
-impl <T> DefineEdgeStatement<T> where T: EdgeType {
+impl<T> DefineEdgeStatement<T>
+where
+    T: EdgeType,
+{
     pub fn get_name(&self) -> Option<String> {
         self.name.clone()
     }
@@ -87,7 +89,7 @@ impl <T> DefineEdgeStatement<T> where T: EdgeType {
     }
 
     pub fn get_changefeed(&self) -> Option<(Duration, bool)> {
-        self.changefeed.clone()
+        self.changefeed
     }
 
     pub fn get_comment(&self) -> Option<String> {
@@ -185,7 +187,7 @@ where
         stmt.push_str(" TYPE RELATION");
 
         if let Some(schema_type) = &self.schema_type {
-            stmt.push_str(" ");
+            stmt.push(' ');
             stmt.push_str(schema_type.to_string().as_str());
         } else {
             stmt.push_str(" SCHEMALESS ")
@@ -237,7 +239,7 @@ where
         let query = self.build()?;
         info!("Executing query: {}", query);
 
-        let mut surreal_query = conn.query(query);
+        let surreal_query = conn.query(query);
 
         let res = surreal_query.await?.take(0);
         match res {
@@ -250,7 +252,10 @@ where
     }
 }
 
-impl<T> Display for DefineEdgeStatement<T> where T: EdgeType {
+impl<T> Display for DefineEdgeStatement<T>
+where
+    T: EdgeType,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.build().unwrap())
     }

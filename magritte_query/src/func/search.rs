@@ -27,17 +27,19 @@ impl Display for SearchFunction {
             Self::Analyze(analyzer, text) => write!(f, "search::analyze({}, {})", analyzer, text),
             Self::Highlight(prefix, suffix, pred_ref, whole_term) => {
                 if let Some(whole) = whole_term {
-                    write!(f, "search::highlight({}, {}, {}, {})", prefix, suffix, pred_ref, whole)
-                }
-                else {
+                    write!(
+                        f,
+                        "search::highlight({}, {}, {}, {})",
+                        prefix, suffix, pred_ref, whole
+                    )
+                } else {
                     write!(f, "search::highlight({}, {}, {})", prefix, suffix, pred_ref)
                 }
             }
             Self::Offsets(pred_ref, whole_term) => {
                 if let Some(whole) = whole_term {
                     write!(f, "search::offsets({}, {})", pred_ref, whole)
-                }
-                else {
+                } else {
                     write!(f, "search::offsets({})", pred_ref)
                 }
             }
@@ -47,7 +49,9 @@ impl Display for SearchFunction {
 }
 
 impl Callable for SearchFunction {
-    fn namespace() -> &'static str { "search" }
+    fn namespace() -> &'static str {
+        "search"
+    }
 
     fn category(&self) -> &'static str {
         match self {

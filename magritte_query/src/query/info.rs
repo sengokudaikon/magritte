@@ -1,14 +1,16 @@
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::SurrealDB;
+use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use surrealdb::Value;
 use tracing::instrument;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DbInfo {
     pub accesses: HashMap<String, String>,
     pub analyzers: HashMap<String, String>,
+    pub configs: HashMap<String, String>,
     pub functions: HashMap<String, String>,
     pub models: HashMap<String, String>,
     pub params: HashMap<String, String>,
@@ -16,13 +18,7 @@ pub struct DbInfo {
     pub users: HashMap<String, String>,
 }
 
-impl From<JsonValue> for DbInfo {
-    fn from(value: JsonValue) -> Self {
-        serde_json::from_value(value).unwrap()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TableInfo {
     pub events: HashMap<String, String>,
     pub fields: HashMap<String, String>,
@@ -31,22 +27,13 @@ pub struct TableInfo {
     pub tables: HashMap<String, String>,
 }
 
-impl From<JsonValue> for TableInfo {
-    fn from(value: JsonValue) -> Self {
-        serde_json::from_value(value).unwrap()
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct InfoStatement {
     conn: SurrealDB,
 }
-impl InfoStatement
-{
-    pub fn new (conn: SurrealDB)-> Self {
-        Self {
-            conn
-        }
+impl InfoStatement {
+    pub fn new(conn: SurrealDB) -> Self {
+        Self { conn }
     }
     /// Get root level info (namespaces and users)
     #[instrument(skip(self))]
@@ -65,21 +52,23 @@ impl InfoStatement
     /// Get database level info (tables, functions, users etc)
     #[instrument(skip(self))]
     pub async fn info_db(&self) -> anyhow::Result<DbInfo> {
-        let result: Value = self.conn.query("INFO FOR DB").await?.take(0)?;
-        Ok(DbInfo::from(serde_json::to_value(result)?))
+        let result: Option<DbInfo> = self.conn.query("INFO FOR DB").await?.take(0)?;
+        let db_info = result.ok_or(anyhow!("Could not deserialize DbInfo"))?;
+        Ok(db_info)
     }
 
     /// Get Table level info (fields, indexes, events)
     #[instrument(skip(self))]
-    pub async fn info_table(&self, table: &str, with_structure: bool) -> anyhow::Result<TableInfo> {
+    pub async fn info_table(&self, table: &str) -> anyhow::Result<TableInfo> {
         let mut query = String::from("INFO FOR TABLE ");
-        query.push_str("$Table");
-        if with_structure {
-            query.push_str(" STRUCTURE");
-        }
-        let result: Value =
-            self.conn.query(query).bind(("Table", table.to_owned())).await?.take(0)?;
-        Ok(TableInfo::from(serde_json::to_value(result)?))
+        query.push_str(table);
+        let result: Option<TableInfo> = self.conn.query(query).await?.check()?.take(0)?;
+        println!(
+            "Info for {}: {}",
+            table,
+            serde_json::to_string_pretty(&result)?
+        );
+        result.ok_or(anyhow!("Could not deserialize TableInfo"))
     }
 
     /// Get user info at specified level

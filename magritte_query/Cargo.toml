@@ -38,6 +38,7 @@ chrono = { version = "0.4", features = ["serde"], optional = true }
 time = { version = "0.3.36", optional = true }
 rand = { version = "0.8.5",features = ["default", "serde1"] }
 futures = "0.3.31"
+syn = "2.0.89"
 
 [features]
 thread-safe = []

@@ -90,9 +90,15 @@ impl DefineFieldStatement {
         self
     }
 
-    pub fn build(&self) -> crate::Result<String> {
+    pub fn build(&self) -> anyhow::Result<String> {
         let mut stmt = String::new();
         stmt.push_str("DEFINE FIELD ");
+        if self.if_not_exists {
+            stmt.push_str("IF NOT EXISTS ");
+        } else if self.overwrite {
+            stmt.push_str("OVERWRITE ");
+        }
+
         if let Some(name) = &self.name {
             if name == "id" {
                 return Ok("".to_string());
@@ -100,12 +106,6 @@ impl DefineFieldStatement {
             stmt.push_str(name.as_str());
         } else {
             bail!("Field name is required");
-        }
-
-        if self.if_not_exists {
-            stmt.push_str(" IF NOT EXISTS");
-        }else if self.overwrite {
-            stmt.push_str(" OVERWRITE");
         }
 
         if let Some(table_name) = &self.table_name {
@@ -164,7 +164,7 @@ impl DefineFieldStatement {
         let query = self.build()?;
         info!("Executing query: {}", query);
 
-        let mut surreal_query = conn.query(query);
+        let surreal_query = conn.query(query);
 
         let res = surreal_query.await?.take(0);
         match res {

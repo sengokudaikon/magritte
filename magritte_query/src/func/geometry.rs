@@ -45,8 +45,11 @@ impl Display for GeoFunction {
             Self::Length(line) => write!(f, "geo::length({})", line),
             Self::Point(lat, lon) => write!(f, "geo::point({}, {})", lat, lon),
             Self::Polygon(points) => {
-                let points_str =
-                    points.iter().map(|(lat, lon)| format!("[{}, {}]", lat, lon)).collect::<Vec<_>>().join(", ");
+                let points_str = points
+                    .iter()
+                    .map(|(lat, lon)| format!("[{}, {}]", lat, lon))
+                    .collect::<Vec<_>>()
+                    .join(", ");
                 write!(f, "geo::polygon([{}])", points_str)
             }
         }
@@ -54,7 +57,9 @@ impl Display for GeoFunction {
 }
 
 impl Callable for GeoFunction {
-    fn namespace() -> &'static str { "geo" }
+    fn namespace() -> &'static str {
+        "geo"
+    }
 
     fn category(&self) -> &'static str {
         match self {

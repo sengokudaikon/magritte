@@ -1,10 +1,10 @@
-use crate::{Permission, RecordType, SchemaType, SelectStatement};
+use crate::transaction::Transactional;
+use crate::{Permission, SchemaType};
 use anyhow::Result;
 use std::sync::Arc;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::instrument;
-use crate::transaction::Transactional;
 
 /// ALTER query builder with allowed method chains
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ pub struct AlterStatement {
     schema_type: Option<SchemaType>,
     permissions: Vec<Permission>,
     comment: Option<String>,
-    in_transaction: bool
+    in_transaction: bool,
 }
 
 impl AlterStatement {
@@ -79,7 +79,7 @@ impl AlterStatement {
             schema_type: None,
             permissions: Vec::new(),
             comment: None,
-            in_transaction: false
+            in_transaction: false,
         }
     }
 
@@ -143,8 +143,7 @@ impl AlterStatement {
         Ok(vec![])
     }
 }
-impl Transactional for AlterStatement
-{
+impl Transactional for AlterStatement {
     fn is_transaction(&self) -> bool {
         self.in_transaction
     }

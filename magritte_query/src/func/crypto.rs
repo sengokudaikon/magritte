@@ -54,31 +54,45 @@ impl Display for CryptoFunction {
             Self::Sha512(val) => write!(f, "crypto::sha512({})", val),
 
             // Argon2 functions
-            Self::Argon2Compare(hash, pass) => write!(f, "crypto::argon2::compare({}, {})", hash, pass),
+            Self::Argon2Compare(hash, pass) => {
+                write!(f, "crypto::argon2::compare({}, {})", hash, pass)
+            }
             Self::Argon2Generate(pass) => write!(f, "crypto::argon2::generate({})", pass),
 
             // Bcrypt functions
-            Self::BcryptCompare(hash, pass) => write!(f, "crypto::bcrypt::compare({}, {})", hash, pass),
+            Self::BcryptCompare(hash, pass) => {
+                write!(f, "crypto::bcrypt::compare({}, {})", hash, pass)
+            }
             Self::BcryptGenerate(pass) => write!(f, "crypto::bcrypt::generate({})", pass),
 
             // PBKDF2 functions
-            Self::Pbkdf2Compare(hash, pass) => write!(f, "crypto::pbkdf2::compare({}, {})", hash, pass),
+            Self::Pbkdf2Compare(hash, pass) => {
+                write!(f, "crypto::pbkdf2::compare({}, {})", hash, pass)
+            }
             Self::Pbkdf2Generate(pass) => write!(f, "crypto::pbkdf2::generate({})", pass),
 
             // Scrypt functions
-            Self::ScryptCompare(hash, pass) => write!(f, "crypto::scrypt::compare({}, {})", hash, pass),
+            Self::ScryptCompare(hash, pass) => {
+                write!(f, "crypto::scrypt::compare({}, {})", hash, pass)
+            }
             Self::ScryptGenerate(pass) => write!(f, "crypto::scrypt::generate({})", pass),
         }
     }
 }
 
 impl Callable for CryptoFunction {
-    fn namespace() -> &'static str { "crypto" }
+    fn namespace() -> &'static str {
+        "crypto"
+    }
 
     fn category(&self) -> &'static str {
         match self {
             // Basic hash functions
-            Self::Blake3(..) | Self::Md5(..) | Self::Sha1(..) | Self::Sha256(..) | Self::Sha512(..) => "hash",
+            Self::Blake3(..)
+            | Self::Md5(..)
+            | Self::Sha1(..)
+            | Self::Sha256(..)
+            | Self::Sha512(..) => "hash",
 
             // Password functions
             Self::Argon2Compare(..) | Self::Argon2Generate(..) => "argon2",
@@ -92,7 +106,10 @@ impl Callable for CryptoFunction {
         matches!(
             self,
             // Compare functions return boolean and can be used in WHERE
-            Self::Argon2Compare(..) | Self::BcryptCompare(..) | Self::Pbkdf2Compare(..) | Self::ScryptCompare(..)
+            Self::Argon2Compare(..)
+                | Self::BcryptCompare(..)
+                | Self::Pbkdf2Compare(..)
+                | Self::ScryptCompare(..)
         )
     }
 }

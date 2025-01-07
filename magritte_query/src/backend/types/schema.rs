@@ -1,8 +1,6 @@
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum SchemaType {

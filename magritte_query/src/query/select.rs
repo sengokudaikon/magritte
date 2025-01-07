@@ -3,22 +3,17 @@
 //! This module contains operations related to selecting and retrieving data
 //! from tables.
 
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::time::Duration;
 
 use crate::{
     Callable, CanCallFunctions, CountFunction, FromTarget, HasConditions, HasLetConditions,
     HasParams, HasProjections, HasVectorConditions, Indexable, Operator, OrderBy, Projection,
-    RangeTarget, RecordType, SqlValue, SurrealDB, SurrealId, VectorCondition,
-    VectorSearch,
+    RangeTarget, RecordType, SqlValue, SurrealDB, SurrealId, VectorCondition, VectorSearch,
 };
 use anyhow::{anyhow, bail, Result};
-use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
-use serde_json::{map, Value};
+use serde_json::Value;
 use tracing::{error, info, instrument};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +45,40 @@ where
     pub(crate) version: Option<String>,
     pub(crate) let_statements: Vec<(String, String)>,
     phantom_data: PhantomData<T>,
+}
+
+impl<T> Default for SelectStatement<T>
+where
+    T: RecordType,
+{
+    fn default() -> Self {
+        SelectStatement {
+            targets: None,
+            select_value: false,
+            with_id: None,
+            only: false,
+            selected_fields: vec![],
+            omitted_fields: None,
+            conditions: vec![],
+            order_by: vec![],
+            group_by: vec![],
+            all: false,
+            limit: None,
+            start: None,
+            parameters: vec![],
+            split_fields: vec![],
+            fetch_fields: vec![],
+            parallel: false,
+            with_index: None,
+            tempfiles: false,
+            timeout: None,
+            vector_conditions: vec![],
+            explain: None,
+            version: None,
+            let_statements: vec![],
+            phantom_data: PhantomData,
+        }
+    }
 }
 
 // Base implementation for all states
@@ -118,11 +147,7 @@ where
 
     /// Add a subquery to SELECT fields
     #[instrument(skip_all)]
-    pub fn subquery<U>(
-        mut self,
-        subquery: SelectStatement<U>,
-        alias: Option<&str>,
-    ) -> Result<Self>
+    pub fn subquery<U>(mut self, subquery: SelectStatement<U>, alias: Option<&str>) -> Result<Self>
     where
         U: RecordType,
     {
@@ -405,32 +430,7 @@ where
         Ok(self)
     }
     pub fn new() -> Self {
-        Self {
-            selected_fields: Vec::new(),
-            omitted_fields: None,
-            conditions: Vec::new(),
-            order_by: Vec::new(),
-            group_by: Vec::new(),
-            all: false,
-            limit: None,
-            fetch_fields: Vec::new(),
-            with_index: None,
-            parameters: Vec::new(),
-            split_fields: Vec::new(),
-            select_value: false,
-            timeout: None,
-            vector_conditions: Vec::new(),
-            targets: None,
-            only: false,
-            start: None,
-            parallel: false,
-            tempfiles: false,
-            explain: None,
-            version: None,
-            let_statements: vec![],
-            phantom_data: PhantomData,
-            with_id: None,
-        }
+        Self::default()
     }
 
     pub fn build(&self) -> Result<String> {
@@ -492,12 +492,10 @@ where
                 }
                 query = query.trim_end_matches(',').parse()?;
             }
+        } else if let Some(id) = &self.with_id {
+            query.push_str(id.to_string().as_str());
         } else {
-            if let Some(id) = &self.with_id {
-                query.push_str(id.to_string().as_str());
-            } else {
-                query.push_str(T::table_name());
-            }
+            query.push_str(T::table_name());
         }
 
         if let Some(with) = &self.with_index {
@@ -515,9 +513,7 @@ where
             let conditions: Vec<String> = self
                 .conditions
                 .iter()
-                .map(|(field, op, value)| {
-                    format!("{} {} {}", field, String::from(op.clone()), value)
-                })
+                .map(|(field, op, value)| format!("{} {} {}", field, String::from(*op), value))
                 .collect();
             query.push_str(&conditions.join(" AND "));
         }
@@ -603,7 +599,7 @@ where
     }
 
     #[instrument(skip(self))]
-    pub async fn execute(mut self, conn: SurrealDB) -> Result<Vec<T>> {
+    pub async fn execute(self, conn: SurrealDB) -> Result<Vec<T>> {
         let query = self.build()?;
         info!("Executing query: {}", query);
 

@@ -43,7 +43,9 @@ impl Display for SessionFunction {
 }
 
 impl Callable for SessionFunction {
-    fn namespace() -> &'static str { "session" }
+    fn namespace() -> &'static str {
+        "session"
+    }
 
     fn category(&self) -> &'static str {
         match self {

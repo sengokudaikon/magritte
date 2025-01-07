@@ -124,16 +124,14 @@ impl Display for ArrayFunction {
             Self::All(arr, condition) => {
                 if let Some(condition) = condition {
                     write!(f, "array::all({}, {})", arr, condition)
-                }
-                else {
+                } else {
                     write!(f, "array::all({})", arr)
                 }
             }
             Self::Any(arr, condition) => {
                 if let Some(condition) = condition {
                     write!(f, "array::any({}, {})", arr, condition)
-                }
-                else {
+                } else {
                     write!(f, "array::any({})", arr)
                 }
             }
@@ -152,18 +150,21 @@ impl Display for ArrayFunction {
             Self::Fill(arr, val, range) => {
                 if let Some((start, end)) = range {
                     write!(f, "array::fill({}, {}, {}, {})", arr, val, start, end)
-                }
-                else {
+                } else {
                     write!(f, "array::fill({}, {})", arr, val)
                 }
             }
             Self::Filter(arr, pattern) => write!(f, "array::filter({}, {})", arr, pattern),
-            Self::FilterIndex(arr, pattern) => write!(f, "array::filter_index({}, {})", arr, pattern),
+            Self::FilterIndex(arr, pattern) => {
+                write!(f, "array::filter_index({}, {})", arr, pattern)
+            }
             Self::Find(arr, pattern) => write!(f, "array::find({}, {})", arr, pattern),
             Self::FindIndex(arr, pattern) => write!(f, "array::find_index({}, {})", arr, pattern),
             Self::First(arr) => write!(f, "array::first({})", arr),
             Self::Flatten(arr) => write!(f, "array::flatten({})", arr),
-            Self::Fold(arr, initial, closure) => write!(f, "array::fold({}, {}, {})", arr, initial, closure),
+            Self::Fold(arr, initial, closure) => {
+                write!(f, "array::fold({}, {}, {})", arr, initial, closure)
+            }
             Self::Group(arr) => write!(f, "array::group({})", arr),
             Self::Insert(arr, idx, val) => write!(f, "array::insert({}, {}, {})", arr, idx, val),
             Self::Intersect(arrays) => write!(f, "array::intersect([{}])", arrays.join(", ")),
@@ -192,12 +193,10 @@ impl Display for ArrayFunction {
                 if let Some(direction) = direction {
                     if *direction {
                         write!(f, "array::sort::asc({})", arr)
-                    }
-                    else {
+                    } else {
                         write!(f, "array::sort::desc({})", arr)
                     }
-                }
-                else {
+                } else {
                     write!(f, "array::sort({})", arr)
                 }
             }
@@ -212,7 +211,9 @@ impl Display for ArrayFunction {
 }
 
 impl Callable for ArrayFunction {
-    fn namespace() -> &'static str { "array" }
+    fn namespace() -> &'static str {
+        "array"
+    }
 
     fn category(&self) -> &'static str {
         match self {
@@ -223,7 +224,10 @@ impl Callable for ArrayFunction {
             // Logical operations
             Self::All(..) | Self::Any(..) | Self::IsEmpty(..) => "logical",
             Self::LogicalAnd(..) | Self::LogicalOr(..) | Self::LogicalXor(..) => "logical",
-            Self::BooleanAnd(..) | Self::BooleanOr(..) | Self::BooleanXor(..) | Self::BooleanNot(..) => "logical",
+            Self::BooleanAnd(..)
+            | Self::BooleanOr(..)
+            | Self::BooleanXor(..)
+            | Self::BooleanNot(..) => "logical",
 
             // Transformation operations
             Self::Map(..) | Self::Filter(..) | Self::Reduce(..) | Self::Fold(..) => "transform",
@@ -232,7 +236,9 @@ impl Callable for ArrayFunction {
             Self::Repeat(..) => "transform",
 
             // Set operations
-            Self::Union(..) | Self::Intersect(..) | Self::Difference(..) | Self::Complement(..) => "set",
+            Self::Union(..) | Self::Intersect(..) | Self::Difference(..) | Self::Complement(..) => {
+                "set"
+            }
             Self::Distinct(..) | Self::Group(..) => "set",
 
             // Analysis operations
@@ -251,7 +257,11 @@ impl Callable for ArrayFunction {
             Self::Range(..) => "range",
 
             // Other operations
-            Self::At(..) | Self::Matches(..) | Self::Fill(..) | Self::Transpose(..) | Self::Swap(..) => "utility",
+            Self::At(..)
+            | Self::Matches(..)
+            | Self::Fill(..)
+            | Self::Transpose(..)
+            | Self::Swap(..) => "utility",
         }
     }
 

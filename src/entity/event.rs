@@ -70,21 +70,22 @@ impl EventDef {
         if self.name == "".to_string() {
             return Ok(def);
         }
+
+        def = def.name(&self.name).table(&self.table);
+
         if self.overwrite {
             def = def.overwrite();
         } else if self.if_not_exists {
             def = def.if_not_exists();
         }
 
-        def = def.name(self.name.clone()).table(self.table.clone());
-
         if let Some(comment) = &self.comment {
-            def = def.comment(comment.clone());
+            def = def.comment(comment);
         }
 
-        def = def.when(self.when.clone());
+        def = def.when(&self.when);
+        def = def.then(&self.then);
 
-        def = def.then(self.then.clone());
         Ok(def)
     }
 }

@@ -104,12 +104,10 @@ impl Display for TypeFunction {
             Self::IsNumber(val) => write!(f, "type::is::number({})", val),
             Self::IsObject(val) => write!(f, "type::is::object({})", val),
             Self::IsPoint(val) => write!(f, "type::is::point({})", val),
-            Self::IsRecord(val, table) => {
-                match table {
-                    Some(t) => write!(f, "type::is::record({}, {})", val, t),
-                    None => write!(f, "type::is::record({})", val),
-                }
-            }
+            Self::IsRecord(val, table) => match table {
+                Some(t) => write!(f, "type::is::record({}, {})", val, t),
+                None => write!(f, "type::is::record({})", val),
+            },
             Self::IsString(val) => write!(f, "type::is::string({})", val),
             Self::IsUuid(val) => write!(f, "type::is::uuid({})", val),
         }
@@ -117,7 +115,9 @@ impl Display for TypeFunction {
 }
 
 impl Callable for TypeFunction {
-    fn namespace() -> &'static str { "type" }
+    fn namespace() -> &'static str {
+        "type"
+    }
 
     fn category(&self) -> &'static str {
         match self {

@@ -1,9 +1,8 @@
 use crate::backend::value::SqlValue;
 use crate::conditions::Operator;
-use crate::graph::Relation;
+use crate::types::Projection;
 use crate::vector_search::VectorCondition;
 use serde_json::Value;
-use crate::types::Projection;
 
 pub trait HasVectorConditions {
     fn get_vector_conditions(&self) -> &Vec<VectorCondition>;

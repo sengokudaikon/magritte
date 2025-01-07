@@ -2,17 +2,14 @@
 //!
 //! This module contains operations related to inserting records into tables.
 
-use std::fmt::{Debug, Display};
-use std::process::id;
+use std::fmt::Debug;
 use std::time::Duration;
 
-use crate::{CreateStatement, FromTarget, RecordType, ReturnType, SurrealDB, SurrealId};
-use anyhow::{anyhow, Result};
-use async_trait::async_trait;
-use serde::Serialize;
-use surrealdb::sql::Value;
-use tracing::{error, info, instrument};
 use crate::transaction::Transactional;
+use crate::{FromTarget, RecordType, ReturnType, SurrealDB, SurrealId};
+use anyhow::{anyhow, Result};
+use serde::Serialize;
+use tracing::{error, info, instrument};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -39,6 +36,15 @@ where
     ignore: bool,
     in_transaction: bool,
     _marker: std::marker::PhantomData<T>,
+}
+
+impl<T> Default for InsertStatement<T>
+where
+    T: RecordType,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> InsertStatement<T>
@@ -178,7 +184,7 @@ where
         if let Some(content) = &self.content {
             match content {
                 Content::Value(value) => {
-                    query.push_str(" ");
+                    query.push(' ');
                     query.push_str(&process_value(value)?);
                 }
                 Content::Set(sets) => {
@@ -211,7 +217,7 @@ where
                             .collect::<Vec<_>>()
                             .join(", "),
                     );
-                    query.push_str(")");
+                    query.push(')');
 
                     // Add ON DUPLICATE KEY UPDATE if present
                     if !sets.is_empty() {
@@ -304,7 +310,7 @@ fn unquote_keys(value: &serde_json::Value) -> Result<String> {
         serde_json::Value::Array(arr) => {
             let values: Vec<String> = arr
                 .iter()
-                .map(|v| unquote_keys(v))
+                .map(unquote_keys)
                 .collect::<Result<Vec<String>>>()?;
             Ok(format!("[{}]", values.join(", ")))
         }

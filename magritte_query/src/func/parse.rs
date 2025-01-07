@@ -53,7 +53,9 @@ impl Display for ParseFunction {
 }
 
 impl Callable for ParseFunction {
-    fn namespace() -> &'static str { "parse" }
+    fn namespace() -> &'static str {
+        "parse"
+    }
 
     fn category(&self) -> &'static str {
         match self {

@@ -32,7 +32,9 @@ impl Display for MetaFunction {
 }
 
 impl Callable for MetaFunction {
-    fn namespace() -> &'static str { "meta" }
+    fn namespace() -> &'static str {
+        "meta"
+    }
 
     fn category(&self) -> &'static str {
         "record" // All meta functions deal with record metadata

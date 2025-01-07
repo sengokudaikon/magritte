@@ -1,10 +1,8 @@
 use crate::backend::value::SqlValue;
 use crate::conditions::Operator;
 use crate::expr::{HasConditions, HasParams};
-use crate::types::{SurrealId, TableType};
 use crate::{Callable, RecordType, SelectStatement};
 use anyhow::anyhow;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use tracing::instrument;
 
@@ -14,8 +12,7 @@ pub trait WhereClause: Sized {
         field: &str,
         op: Operator,
         value: Option<V>,
-    ) -> anyhow::Result<Self>
-    ;
+    ) -> anyhow::Result<Self>;
     fn where_in<U>(self, field: &str, subquery: SelectStatement<U>) -> anyhow::Result<Self>
     where
         U: RecordType;

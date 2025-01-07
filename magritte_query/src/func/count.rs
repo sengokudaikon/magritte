@@ -32,9 +32,13 @@ impl Display for CountFunction {
 }
 
 impl Callable for CountFunction {
-    fn namespace() -> &'static str { "count" }
+    fn namespace() -> &'static str {
+        "count"
+    }
 
-    fn category(&self) -> &'static str { "aggregation" }
+    fn category(&self) -> &'static str {
+        "aggregation"
+    }
 
     fn can_filter(&self) -> bool {
         false // Count functions return numeric values, not boolean

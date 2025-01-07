@@ -1,9 +1,8 @@
 //! Base types used throughout magritte_query.
 
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Serialize;
 use std::fmt::{Debug, Display};
-use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
@@ -20,6 +19,7 @@ pub mod record;
 
 pub mod index;
 
+pub use field_type::*;
 pub use index::*;
 pub use order::*;
 pub use permission::*;
@@ -28,9 +28,7 @@ pub use range::*;
 pub use record::RecordRef;
 pub use record::SurrealId;
 pub use return_type::*;
-pub use schema::*;
 pub use schema::SchemaType;
-pub use field_type::*;
 
 pub trait NamedType {
     fn table_name() -> &'static str;
@@ -104,7 +102,7 @@ pub trait IndexType:
     fn table_name() -> &'static str;
 }
 
-pub trait Relations: Clone + Copy + Send + Sync + IntoEnumIterator + 'static{}
+pub trait Relations: Clone + Copy + Send + Sync + IntoEnumIterator + 'static {}
 
 pub trait RelationType: Clone + Send + Sync + 'static {
     fn relation_via() -> String;
@@ -129,9 +127,9 @@ pub trait ColumnTypeLite:
 }
 
 pub type Record = Arc<dyn RecordType>;
+mod field_type;
 #[cfg(feature = "uuid")]
 pub mod uuid;
-mod field_type;
 
 #[cfg(feature = "uuid")]
 pub use uuid::*;

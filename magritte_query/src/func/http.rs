@@ -30,28 +30,24 @@ impl Display for HttpFunction {
                 if let Some(headers) = headers {
                     if let Some(body) = body {
                         write!(f, "http::delete({}, {}, {})", url, headers, body)
-                    }
-                    else {
+                    } else {
                         write!(f, "http::delete({}, {})", url, headers)
                     }
-                }
-                else {
+                } else {
                     write!(f, "http::delete({})", url)
                 }
             }
             Self::Get(url, headers) => {
                 if let Some(headers) = headers {
                     write!(f, "http::get({}, {})", url, headers)
-                }
-                else {
+                } else {
                     write!(f, "http::get({})", url)
                 }
             }
             Self::Head(url, headers) => {
                 if let Some(headers) = headers {
                     write!(f, "http::head({}, {})", url, headers)
-                }
-                else {
+                } else {
                     write!(f, "http::head({})", url)
                 }
             }
@@ -59,12 +55,10 @@ impl Display for HttpFunction {
                 if let Some(headers) = headers {
                     if let Some(body) = body {
                         write!(f, "http::patch({}, {}, {})", url, headers, body)
-                    }
-                    else {
+                    } else {
                         write!(f, "http::patch({}, {})", url, headers)
                     }
-                }
-                else {
+                } else {
                     write!(f, "http::patch({})", url)
                 }
             }
@@ -72,12 +66,10 @@ impl Display for HttpFunction {
                 if let Some(headers) = headers {
                     if let Some(body) = body {
                         write!(f, "http::post({}, {}, {})", url, headers, body)
-                    }
-                    else {
+                    } else {
                         write!(f, "http::post({}, {})", url, headers)
                     }
-                }
-                else {
+                } else {
                     write!(f, "http::post({})", url)
                 }
             }
@@ -85,12 +77,10 @@ impl Display for HttpFunction {
                 if let Some(headers) = headers {
                     if let Some(body) = body {
                         write!(f, "http::put({}, {}, {})", url, headers, body)
-                    }
-                    else {
+                    } else {
                         write!(f, "http::put({}, {})", url, headers)
                     }
-                }
-                else {
+                } else {
                     write!(f, "http::put({})", url)
                 }
             }
@@ -99,7 +89,9 @@ impl Display for HttpFunction {
 }
 
 impl Callable for HttpFunction {
-    fn namespace() -> &'static str { "http" }
+    fn namespace() -> &'static str {
+        "http"
+    }
 
     fn category(&self) -> &'static str {
         match self {

@@ -159,16 +159,28 @@ impl Display for StringFunction {
             Self::Words(str) => write!(f, "string::words({})", str),
 
             // Distance functions
-            Self::DamerauLevenshtein(s1, s2) => write!(f, "string::distance::damerau_levenshtein({}, {})", s1, s2),
+            Self::DamerauLevenshtein(s1, s2) => {
+                write!(f, "string::distance::damerau_levenshtein({}, {})", s1, s2)
+            }
             Self::NormalizedDamerauLevenshtein(s1, s2) => {
-                write!(f, "string::distance::normalized_damerau_levenshtein({}, {})", s1, s2)
+                write!(
+                    f,
+                    "string::distance::normalized_damerau_levenshtein({}, {})",
+                    s1, s2
+                )
             }
             Self::Hamming(s1, s2) => write!(f, "string::distance::hamming({}, {})", s1, s2),
             Self::Levenshtein(s1, s2) => write!(f, "string::distance::levenshtein({}, {})", s1, s2),
             Self::NormalizedLevenshtein(s1, s2) => {
-                write!(f, "string::distance::normalized_levenshtein({}, {})", s1, s2)
+                write!(
+                    f,
+                    "string::distance::normalized_levenshtein({}, {})",
+                    s1, s2
+                )
             }
-            Self::OsaDistance(s1, s2) => write!(f, "string::distance::osa_distance({}, {})", s1, s2),
+            Self::OsaDistance(s1, s2) => {
+                write!(f, "string::distance::osa_distance({}, {})", s1, s2)
+            }
 
             // HTML functions
             Self::HtmlEncode(str) => write!(f, "string::html::encode({})", str),
@@ -188,12 +200,10 @@ impl Display for StringFunction {
             Self::IsLatitude(str) => write!(f, "string::is::latitude({})", str),
             Self::IsLongitude(str) => write!(f, "string::is::longitude({})", str),
             Self::IsNumeric(str) => write!(f, "string::is::numeric({})", str),
-            Self::IsRecord(str, table) => {
-                match table {
-                    Some(t) => write!(f, "string::is::record({}, {})", str, t),
-                    None => write!(f, "string::is::record({})", str),
-                }
-            }
+            Self::IsRecord(str, table) => match table {
+                Some(t) => write!(f, "string::is::record({}, {})", str, t),
+                None => write!(f, "string::is::record({})", str),
+            },
             Self::IsSemver(str) => write!(f, "string::is::semver({})", str),
             Self::IsUlid(str) => write!(f, "string::is::ulid({})", str),
             Self::IsUrl(str) => write!(f, "string::is::url({})", str),
@@ -207,20 +217,30 @@ impl Display for StringFunction {
             Self::SemverIncMajor(ver) => write!(f, "string::semver::inc::major({})", ver),
             Self::SemverIncMinor(ver) => write!(f, "string::semver::inc::minor({})", ver),
             Self::SemverIncPatch(ver) => write!(f, "string::semver::inc::patch({})", ver),
-            Self::SemverSetMajor(ver, val) => write!(f, "string::semver::set::major({}, {})", ver, val),
-            Self::SemverSetMinor(ver, val) => write!(f, "string::semver::set::minor({}, {})", ver, val),
-            Self::SemverSetPatch(ver, val) => write!(f, "string::semver::set::patch({}, {})", ver, val),
+            Self::SemverSetMajor(ver, val) => {
+                write!(f, "string::semver::set::major({}, {})", ver, val)
+            }
+            Self::SemverSetMinor(ver, val) => {
+                write!(f, "string::semver::set::minor({}, {})", ver, val)
+            }
+            Self::SemverSetPatch(ver, val) => {
+                write!(f, "string::semver::set::patch({}, {})", ver, val)
+            }
 
             // Similarity functions
             Self::SimilarityFuzzy(s1, s2) => write!(f, "string::similarity::fuzzy({}, {})", s1, s2),
             Self::SimilarityJaro(s1, s2) => write!(f, "string::similarity::jaro({}, {})", s1, s2),
-            Self::SimilarityJaroWinkler(s1, s2) => write!(f, "string::similarity::jaro_winkler({}, {})", s1, s2),
+            Self::SimilarityJaroWinkler(s1, s2) => {
+                write!(f, "string::similarity::jaro_winkler({}, {})", s1, s2)
+            }
         }
     }
 }
 
 impl Callable for StringFunction {
-    fn namespace() -> &'static str { "string" }
+    fn namespace() -> &'static str {
+        "string"
+    }
 
     fn category(&self) -> &'static str {
         match self {
@@ -239,7 +259,9 @@ impl Callable for StringFunction {
             Self::Lowercase(..) | Self::Uppercase(..) => "case",
 
             // String checks
-            Self::Contains(..) | Self::EndsWith(..) | Self::StartsWith(..) | Self::Matches(..) => "check",
+            Self::Contains(..) | Self::EndsWith(..) | Self::StartsWith(..) | Self::Matches(..) => {
+                "check"
+            }
 
             // String analysis
             Self::Len(..) => "analysis",
@@ -291,7 +313,9 @@ impl Callable for StringFunction {
             | Self::SemverSetPatch(..) => "semver",
 
             // Similarity functions
-            Self::SimilarityFuzzy(..) | Self::SimilarityJaro(..) | Self::SimilarityJaroWinkler(..) => "similarity",
+            Self::SimilarityFuzzy(..)
+            | Self::SimilarityJaro(..)
+            | Self::SimilarityJaroWinkler(..) => "similarity",
         }
     }
 

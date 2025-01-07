@@ -1,8 +1,8 @@
-#[derive(Clone, Debug)]
-pub struct IndexDeleteStatement{}
+#[derive(Clone, Debug, Default)]
+pub struct IndexDeleteStatement {}
 
 impl IndexDeleteStatement {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }

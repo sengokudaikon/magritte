@@ -289,7 +289,9 @@ impl Display for MathFunction {
             Self::Median(val) => write!(f, "math::median({})", val),
             Self::Min(val) => write!(f, "math::min({})", val),
             Self::Mode(val) => write!(f, "math::mode({})", val),
-            Self::Percentile(val, percentile) => write!(f, "math::percentile({}, {})", val, percentile),
+            Self::Percentile(val, percentile) => {
+                write!(f, "math::percentile({}, {})", val, percentile)
+            }
             Self::Pow(val, power) => write!(f, "math::pow({}, {})", val, power),
             Self::Product(val) => write!(f, "math::product({})", val),
             Self::Rad2deg(val) => write!(f, "math::rad2deg({})", val),
@@ -304,7 +306,9 @@ impl Display for MathFunction {
             Self::Variance(val) => write!(f, "math::variance({})", val),
             Self::Interquartile(val) => write!(f, "math::interquartile({})", val),
             Self::Lerp(v1, v2, factor) => write!(f, "math::lerp({}, {}, {})", v1, v2, factor),
-            Self::LerpAngle(a1, a2, factor) => write!(f, "math::lerpangle({}, {}, {})", a1, a2, factor),
+            Self::LerpAngle(a1, a2, factor) => {
+                write!(f, "math::lerpangle({}, {}, {})", a1, a2, factor)
+            }
             Self::Midhinge(val) => write!(f, "math::midhinge({})", val),
             Self::Spread(val) => write!(f, "math::spread({})", val),
             Self::Trimean(val) => write!(f, "math::trimean({})", val),
@@ -333,7 +337,9 @@ impl Display for MathFunction {
 }
 
 impl Callable for MathFunction {
-    fn namespace() -> &'static str { "math" }
+    fn namespace() -> &'static str {
+        "math"
+    }
 
     fn category(&self) -> &'static str {
         match self {

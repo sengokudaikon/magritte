@@ -5,6 +5,7 @@ pub mod config;
 pub mod connection;
 pub mod credentials;
 pub mod manager;
+mod runtime;
 
 pub type BoxedResultSendFuture<'r, T, E> =
     Pin<Box<dyn Future<Output = std::result::Result<T, E>> + 'r + Send>>;
@@ -15,7 +16,7 @@ use surrealdb::Error as SurrealError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum Error {
+pub enum PoolError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
@@ -30,6 +31,9 @@ pub enum Error {
 
     #[error("Generic error: {0}")]
     Generic(String),
+
+    #[error("Build error: {0}")]
+    Build(#[from] deadpool::managed::BuildError)
 }
 
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, PoolError>;

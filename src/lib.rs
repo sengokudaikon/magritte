@@ -1,11 +1,12 @@
 #![feature(duration_constructors)]
-#![feature(min_specialization)]
 #![feature(associated_type_defaults)]
 #![feature(const_type_id)]
-#![feature(const_trait_impl)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
-//! magritte - A powerful QueryBuilder for SurrealDB
+#![cfg_attr(feature = "coroutines", feature(coroutines))]
+#![cfg_attr(feature = "coroutines", feature(coroutine_trait))]
+#![cfg_attr(feature = "coroutines", feature(stmt_expr_attributes))]
+//! Magritte - A powerful QueryBuilder for SurrealDB
 //!
 //! Named after René Magritte, a Belgian surrealist artist.
 //! This crate provides a type-safe query
@@ -16,17 +17,17 @@ mod defs;
 pub mod entity;
 pub mod entity_crud;
 pub mod snapshot;
-pub mod test_util;
 
 pub use entity::manager::registry::EntityProxyRegistration;
 pub use entity::relation::LoadStrategy;
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use std::collections::HashMap;
+use cfg_if::cfg_if;
 use thiserror::Error;
 
 /// Error type for magritte operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum MagritteError {
     #[error("SurrealDB error: {0}")]
     Surreal(#[from] surrealdb::Error),
@@ -39,6 +40,9 @@ pub enum MagritteError {
 
     #[error("Schema error: {0}")]
     Schema(String),
+
+    #[error("Error: {0}")]
+    Any(#[from] anyhow::Error),
 }
 
 /// Error during `impl FromStr for Table::Column`
@@ -126,30 +130,30 @@ pub struct EdgeRegistration {
 
 #[derive(Clone)]
 pub struct EventRegistration {
-    pub parent_type: TypeId,
-    pub event_defs:  &'static [EventDef],
-}
-
-#[derive(Clone)]
-pub struct IndexRegistration {
-    pub parent_type: TypeId,
-    pub index_defs: &'static [IndexDef],
+    pub builder: fn() -> Vec<EventDef>,
+    pub type_id: std::any::TypeId,
 }
 
 impl EventRegistration {
-    pub const fn new_static<T: 'static>(events: &'static [EventDef]) -> Self {
+    pub fn new<T: NamedType + 'static>(builder: fn() -> Vec<EventDef>) -> Self {
         Self {
-            parent_type: TypeId::of::<T>(),
-            event_defs: events,
+            builder,
+            type_id: std::any::TypeId::of::<T>(),
         }
     }
 }
 
+#[derive(Clone)]
+pub struct IndexRegistration {
+    pub builder: fn() -> Vec<IndexDef>,
+    pub type_id: std::any::TypeId,
+}
+
 impl IndexRegistration {
-    pub const fn new_static<T: 'static>(indexes: &'static [IndexDef]) -> Self {
+    pub fn new<T: NamedType + 'static>(builder: fn() -> Vec<IndexDef>) -> Self {
         Self {
-            parent_type: TypeId::of::<T>(),
-            index_defs: indexes,
+            builder,
+            type_id: std::any::TypeId::of::<T>(),
         }
     }
 }
@@ -167,5 +171,6 @@ inventory::collect!(EventRegistration);
 inventory::collect!(IndexRegistration);
 
 use crate::entity_crud::SurrealCrud;
+
 #[cfg(feature = "uuid")]
 pub use magritte_query::uuid::*;

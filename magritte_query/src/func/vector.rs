@@ -75,30 +75,48 @@ impl Display for VectorFunction {
             Self::Subtract(v1, v2) => write!(f, "vector::subtract({}, {})", v1, v2),
 
             // Distance functions
-            Self::DistanceChebyshev(v1, v2) => write!(f, "vector::distance::chebyshev({}, {})", v1, v2),
-            Self::DistanceEuclidean(v1, v2) => write!(f, "vector::distance::euclidean({}, {})", v1, v2),
+            Self::DistanceChebyshev(v1, v2) => {
+                write!(f, "vector::distance::chebyshev({}, {})", v1, v2)
+            }
+            Self::DistanceEuclidean(v1, v2) => {
+                write!(f, "vector::distance::euclidean({}, {})", v1, v2)
+            }
             Self::DistanceHamming(v1, v2) => write!(f, "vector::distance::hamming({}, {})", v1, v2),
             Self::DistanceKnn => write!(f, "vector::distance::knn()"),
-            Self::DistanceManhattan(v1, v2) => write!(f, "vector::distance::manhattan({}, {})", v1, v2),
-            Self::DistanceMinkowski(v1, v2, p) => write!(f, "vector::distance::minkowski({}, {}, {})", v1, v2, p),
+            Self::DistanceManhattan(v1, v2) => {
+                write!(f, "vector::distance::manhattan({}, {})", v1, v2)
+            }
+            Self::DistanceMinkowski(v1, v2, p) => {
+                write!(f, "vector::distance::minkowski({}, {}, {})", v1, v2, p)
+            }
 
             // Similarity functions
-            Self::SimilarityCosine(v1, v2) => write!(f, "vector::similarity::cosine({}, {})", v1, v2),
-            Self::SimilarityJaccard(v1, v2) => write!(f, "vector::similarity::jaccard({}, {})", v1, v2),
-            Self::SimilarityPearson(v1, v2) => write!(f, "vector::similarity::pearson({}, {})", v1, v2),
+            Self::SimilarityCosine(v1, v2) => {
+                write!(f, "vector::similarity::cosine({}, {})", v1, v2)
+            }
+            Self::SimilarityJaccard(v1, v2) => {
+                write!(f, "vector::similarity::jaccard({}, {})", v1, v2)
+            }
+            Self::SimilarityPearson(v1, v2) => {
+                write!(f, "vector::similarity::pearson({}, {})", v1, v2)
+            }
         }
     }
 }
 
 impl Callable for VectorFunction {
-    fn namespace() -> &'static str { "vector" }
+    fn namespace() -> &'static str {
+        "vector"
+    }
 
     fn category(&self) -> &'static str {
         match self {
             // Basic vector operations
-            Self::Add(..) | Self::Subtract(..) | Self::Multiply(..) | Self::Divide(..) | Self::Scale(..) => {
-                "arithmetic"
-            }
+            Self::Add(..)
+            | Self::Subtract(..)
+            | Self::Multiply(..)
+            | Self::Divide(..)
+            | Self::Scale(..) => "arithmetic",
 
             // Vector products and angles
             Self::Dot(..) | Self::Cross(..) | Self::Angle(..) => "product",
@@ -118,7 +136,9 @@ impl Callable for VectorFunction {
             | Self::DistanceMinkowski(..) => "distance",
 
             // Similarity metrics
-            Self::SimilarityCosine(..) | Self::SimilarityJaccard(..) | Self::SimilarityPearson(..) => "similarity",
+            Self::SimilarityCosine(..)
+            | Self::SimilarityJaccard(..)
+            | Self::SimilarityPearson(..) => "similarity",
         }
     }
 

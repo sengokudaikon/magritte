@@ -1,8 +1,7 @@
-use std::fmt::Display;
+use crate::{IndexSpecifics, SurrealDB};
 use anyhow::{anyhow, bail};
+use std::fmt::Display;
 use tracing::{error, info};
-use crate::{EdgeType, IndexSpecifics, SurrealDB};
-use crate::define_edge::DefineEdgeStatement;
 
 #[derive(Default, Debug, Clone)]
 pub struct DefineIndexStatement {
@@ -20,7 +19,18 @@ pub struct DefineIndexStatement {
 
 impl DefineIndexStatement {
     pub fn new() -> Self {
-        Self { table: None, name: None, if_not_exists: false, fields: None, columns: None, unique: false, specifics: Default::default(), comment: None, overwrite: false, concurrently: false }
+        Self {
+            table: None,
+            name: None,
+            if_not_exists: false,
+            fields: None,
+            columns: None,
+            unique: false,
+            specifics: Default::default(),
+            comment: None,
+            overwrite: false,
+            concurrently: false,
+        }
     }
 
     pub fn table(mut self, table: impl Into<String>) -> Self {
@@ -132,7 +142,6 @@ impl DefineIndexStatement {
         Ok(stmt)
     }
 
-
     pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
         let query = self.build()?;
         if query.is_empty() {
@@ -140,7 +149,7 @@ impl DefineIndexStatement {
         }
         info!("Executing query: {}", query);
 
-        let mut surreal_query = conn.query(query);
+        let surreal_query = conn.query(query);
 
         let res = surreal_query.await?.take(0);
         match res {
@@ -152,7 +161,6 @@ impl DefineIndexStatement {
         }
     }
 }
-
 
 impl Display for DefineIndexStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

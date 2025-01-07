@@ -1,6 +1,4 @@
-use std::any::Any;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter, Write};
 use std::time::Duration;
@@ -21,8 +19,8 @@ pub enum FieldType {
     Point,
     String,
     Uuid,
-    Record(Vec<String>),
-    Geometry(Vec<String>),
+    Record(String),
+    Geometry(String),
     Option(Box<FieldType>),
     Either(Vec<FieldType>),
     Set(Box<FieldType>, Option<u64>),
@@ -204,15 +202,15 @@ impl From<String> for FieldType {
             s if s.starts_with("option<") => {
                 let inner = s[7..s.len() - 1].to_string();
                 FieldType::Option(Box::new(FieldType::from(inner)))
-            },
+            }
             s if s.starts_with("record<") => {
                 let inner = s[7..s.len() - 1].to_string();
-                FieldType::Record(inner.split('|').map(|s| s.trim().to_string()).collect())
-            },
+                FieldType::Record(inner)
+            }
             s if s.starts_with("geometry<") => {
                 let inner = s[9..s.len() - 1].to_string();
-                FieldType::Geometry(inner.split('|').map(|s| s.trim().to_string()).collect())
-            },
+                FieldType::Geometry(inner)
+            }
             s if s.starts_with("set<") || s.starts_with("array<") => {
                 let (kind, inner) = s.split_once('<').unwrap();
                 let inner = inner[..inner.len() - 1].to_string();
@@ -224,10 +222,14 @@ impl From<String> for FieldType {
                     "array" => FieldType::Array(Box::new(inner_type), size),
                     _ => unreachable!(),
                 }
-            },
+            }
             _ => {
                 if v.contains('|') {
-                    FieldType::Either(v.split('|').map(|s| FieldType::from(s.trim().to_string())).collect())
+                    FieldType::Either(
+                        v.split('|')
+                            .map(|s| FieldType::from(s.trim().to_string()))
+                            .collect(),
+                    )
                 } else {
                     // Default to string if no match
                     FieldType::String
@@ -264,11 +266,11 @@ impl Display for FieldType {
             FieldType::Option(k) => write!(f, "option<{}>", k),
             FieldType::Record(k) => match k {
                 k if k.is_empty() => write!(f, "record"),
-                k => write!(f, "record<{}>", k.join(" | ")),
+                k => write!(f, "record<{}>", k),
             },
             FieldType::Geometry(k) => match k {
                 k if k.is_empty() => write!(f, "geometry"),
-                k => write!(f, "geometry<{}>", k.join(" | ")),
+                k => write!(f, "geometry<{}>", k),
             },
             FieldType::Set(k, l) => match (k, l) {
                 (k, None) if k.is_any() => write!(f, "set"),
@@ -280,7 +282,14 @@ impl Display for FieldType {
                 (k, None) => write!(f, "array<{k}>"),
                 (k, Some(l)) => write!(f, "array<{k}, {l}>"),
             },
-            FieldType::Either(k) => write!(f, "{}", k.into_iter().map(|f|f.to_string()).collect::<Vec<String>>().join(" | ")),
+            FieldType::Either(k) => write!(
+                f,
+                "{}",
+                k.iter()
+                    .map(|f| f.to_string())
+                    .collect::<Vec<String>>()
+                    .join(" | ")
+            ),
             FieldType::Range => f.write_str("range"),
             FieldType::Literal(l) => write!(f, "{}", l),
         }
@@ -327,7 +336,14 @@ impl Display for Literal {
             Literal::Array(a) => {
                 f.write_char('[')?;
                 if !a.is_empty() {
-                    write!(f, "{}", a.into_iter().map(|f|f.to_string()).collect::<Vec<String>>().join(","))?;
+                    write!(
+                        f,
+                        "{}",
+                        a.iter()
+                            .map(|f| f.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    )?;
                 }
                 f.write_char(']')
             }

@@ -1,10 +1,6 @@
+use crate::graph::Relation;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
-use crate::graph::Relation;
-use crate::types::schema::SchemaType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Projection {
@@ -29,7 +25,15 @@ impl Display for Projection {
             Projection::Field(field) => write!(f, "{}", field),
             Projection::FieldAs(field, alias) => write!(f, "{} AS {}", field, alias),
             Projection::Fields(fields) => write!(f, "{}", fields.join(", ")),
-            Projection::FieldsAs(fields) => write!(f, "{}", fields.iter().map(|(field, alias)| format!("{} AS {}", field, alias)).collect::<Vec<_>>().join(", ")),
+            Projection::FieldsAs(fields) => write!(
+                f,
+                "{}",
+                fields
+                    .iter()
+                    .map(|(field, alias)| format!("{} AS {}", field, alias))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Projection::Raw(raw) => write!(f, "{}", raw),
             Projection::RawAs(raw, alias) => write!(f, "{} AS {}", raw, alias),
             Projection::Subquery(query, alias) => {
@@ -41,7 +45,9 @@ impl Display for Projection {
             }
             Projection::RelationWildcardAs(alias) => write!(f, "->?->? AS {}", alias),
             Projection::RelationInverseWildcardAs(alias) => write!(f, "<-?<-? AS {}", alias),
-            Projection::RelationBidirectionalWildcardAs(alias) => write!(f, "<->?<->? AS {}", alias),
+            Projection::RelationBidirectionalWildcardAs(alias) => {
+                write!(f, "<->?<->? AS {}", alias)
+            }
             Projection::Relation(relation) => write!(f, "{}", relation),
         }
     }

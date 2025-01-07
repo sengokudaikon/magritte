@@ -1,19 +1,13 @@
-#![allow(ambiguous_glob_reexports)]
+#![allow(clippy::wrong_self_convention)]
 #![allow(unused)]
+#![allow(ambiguous_glob_reexports)]
 pub mod backend;
+pub mod define;
 pub mod func;
 pub mod query;
-pub mod define;
-
-
-use std::sync::Arc;
-pub use anyhow::Result;
-pub use surrealdb::engine::any::Any;
-pub use surrealdb::Surreal;
-pub type SurrealDB = Arc<Surreal<Any>>;
+pub type SurrealDB = std::sync::Arc<surrealdb::Surreal<surrealdb::engine::any::Any>>;
 
 pub use backend::*;
-pub use expr::*;
+pub use define::*;
 pub use func::*;
 pub use query::*;
-pub use define::*;

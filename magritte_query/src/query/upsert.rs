@@ -1,10 +1,8 @@
 use crate::{
-    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns,
-    SqlValue, SurrealDB, SurrealId,
+    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
+    SurrealDB, SurrealId,
 };
 use anyhow::anyhow;
-use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use std::marker::PhantomData;
@@ -37,6 +35,27 @@ where
     return_type: Option<ReturnType>,
     in_transaction: bool,
     _marker: PhantomData<T>,
+}
+
+impl<T> Default for UpsertStatement<T>
+where
+    T: RecordType,
+{
+    fn default() -> Self {
+        Self {
+            targets: None,
+            with_id: None,
+            only: false,
+            content: None,
+            conditions: vec![],
+            parameters: vec![],
+            parallel: false,
+            timeout: None,
+            return_type: None,
+            in_transaction: false,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<T> UpsertStatement<T>
@@ -86,19 +105,7 @@ where
     }
 
     pub fn new() -> Self {
-        Self {
-            targets: None,
-            with_id: None,
-            only: false,
-            content: None,
-            conditions: vec![],
-            parameters: vec![],
-            parallel: false,
-            timeout: None,
-            return_type: Default::default(),
-            in_transaction: false,
-            _marker: PhantomData,
-        }
+        Self::default()
     }
 
     pub fn build(&self) -> anyhow::Result<String> {
@@ -168,9 +175,7 @@ where
             let conditions: Vec<String> = self
                 .conditions
                 .iter()
-                .map(|(field, op, value)| {
-                    format!("{} {} {}", field, String::from(op.clone()), value)
-                })
+                .map(|(field, op, value)| format!("{} {} {}", field, String::from(*op), value))
                 .collect();
             query.push_str(&conditions.join(" AND "));
         }

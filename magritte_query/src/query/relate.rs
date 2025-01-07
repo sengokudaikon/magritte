@@ -1,16 +1,13 @@
-use std::marker::PhantomData;
 use std::time::Duration;
 
+use crate::transaction::Transactional;
+use crate::{ReturnType, Returns, SurrealDB};
 use anyhow::Result;
-use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
-use crate::{CreateStatement, RecordType, ReturnType, Returns, SurrealDB};
-use crate::transaction::Transactional;
 
 /// Builder for RELATE statements
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct RelateStatement {
     from_record: String,
     to_record: String,
@@ -22,11 +19,10 @@ pub struct RelateStatement {
     return_fields: Option<Vec<String>>,
     timeout: Option<Duration>,
     parallel: bool,
-    in_transaction: bool
+    in_transaction: bool,
 }
 
-impl RelateStatement
-{
+impl RelateStatement {
     /// Set ONLY flag for single relation
     pub fn only(mut self) -> Self {
         self.only = true;
@@ -74,19 +70,7 @@ impl RelateStatement
     }
 
     pub fn new() -> Self {
-        Self {
-            from_record: String::new(),
-            to_record: String::new(),
-            edge_table: String::new(),
-            only: false,
-            content: None,
-            set_fields: Vec::new(),
-            return_type: None,
-            return_fields: None,
-            timeout: None,
-            parallel: false,
-            in_transaction: false
-        }
+        Self::default()
     }
 
     pub fn build(&self) -> Result<String> {
@@ -160,14 +144,12 @@ impl RelateStatement
     }
 }
 
-impl Returns for RelateStatement
-{
+impl Returns for RelateStatement {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type
     }
 }
-impl Transactional for RelateStatement
-{
+impl Transactional for RelateStatement {
     fn is_transaction(&self) -> bool {
         self.in_transaction
     }

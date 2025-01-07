@@ -2,13 +2,11 @@ use crate::define::table::define_table::DefineTableStatement;
 use crate::query::alter::AlterStatement;
 use crate::query::delete::DeleteStatement;
 use crate::query::update::UpdateStatement;
-use crate::types::{RecordType, TableType};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use crate::types::TableType;
 use std::marker::PhantomData;
 
-pub mod define_table;
 pub mod define_edge;
+pub mod define_table;
 
 /// Helper for constructing any Table statement
 #[derive(Debug)]
@@ -18,7 +16,10 @@ pub struct Table<T> {
 
 /// All available types of Table statement
 #[derive(Debug, Clone)]
-pub enum TableStatement<T> where T:TableType{
+pub enum TableStatement<T>
+where
+    T: TableType,
+{
     Define(DefineTableStatement<T>),
     Alter(AlterStatement),
     Delete(DeleteStatement<T>),
@@ -26,7 +27,8 @@ pub enum TableStatement<T> where T:TableType{
 }
 
 impl<T> Table<T>
-where T:TableType
+where
+    T: TableType,
 {
     pub fn define() -> DefineTableStatement<T> {
         DefineTableStatement::new()
@@ -43,7 +45,8 @@ where T:TableType
 }
 
 impl<T> TableStatement<T>
-where T:TableType
+where
+    T: TableType,
 {
     /// Build corresponding SQL statement for certain database backend and return SQL string
     pub fn build(&self) -> anyhow::Result<String> {

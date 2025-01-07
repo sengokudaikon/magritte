@@ -1,7 +1,6 @@
 use crate::{Permission, SchemaType, SurrealDB, TableType};
 use anyhow::{anyhow, bail};
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::Duration;
@@ -17,7 +16,7 @@ pub struct AsSelect {
 impl Display for AsSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut query = String::new();
-        query.push_str(&format!("{}", &self.projections));
+        query.push_str(&self.projections.to_string());
         query.push_str(&format!(" FROM {}", &self.from));
         if let Some(where_clause) = &self.where_ {
             query.push_str(&format!(" WHERE {}", where_clause));
@@ -42,12 +41,10 @@ impl FromStr for AsSelect {
                 projections = line.to_string();
             } else if i == 1 {
                 from = line.to_string();
-            } else {
-                if line.starts_with("WHERE") {
-                    where_ = Some(line.to_string());
-                } else if line.starts_with("GROUP BY") {
-                    group_by = Some(line.to_string());
-                }
+            } else if line.starts_with("WHERE") {
+                where_ = Some(line.to_string());
+            } else if line.starts_with("GROUP BY") {
+                group_by = Some(line.to_string());
             }
         }
         Ok(AsSelect {
@@ -72,7 +69,10 @@ pub struct DefineTableStatement<T: TableType> {
     _marker: std::marker::PhantomData<T>,
 }
 
-impl <T> Default for DefineTableStatement<T> where T: TableType {
+impl<T> Default for DefineTableStatement<T>
+where
+    T: TableType,
+{
     fn default() -> Self {
         Self {
             name: None,
@@ -121,7 +121,7 @@ where
     }
 
     pub fn get_changefeed(&self) -> Option<(Duration, bool)> {
-        self.changefeed.clone()
+        self.changefeed
     }
 
     pub fn get_comment(&self) -> Option<String> {
@@ -204,7 +204,7 @@ where
         stmt.push_str(" TYPE NORMAL");
 
         if let Some(schema_type) = &self.schema_type {
-            stmt.push_str(" ");
+            stmt.push(' ');
             stmt.push_str(schema_type.to_string().as_str());
         } else {
             stmt.push_str(" SCHEMALESS ")
@@ -240,7 +240,7 @@ where
         let query = self.build()?;
         info!("Executing query: {}", query);
 
-        let mut surreal_query = conn.query(query);
+        let surreal_query = conn.query(query);
 
         let res = surreal_query.await?.take(0);
         match res {

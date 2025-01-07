@@ -1,13 +1,13 @@
-use std::fmt::{Display, Formatter};
 use serde::Serialize;
 use serde_json::Value;
+use std::fmt::{Display, Formatter};
 
 use super::conditions::Operator;
 use super::types::Projection;
 use crate::backend::value::SqlValue;
 use crate::expr::HasProjections;
-use crate::{RelationType, SelectStatement};
 use crate::types::TableType;
+use crate::SelectStatement;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RelationDirection {
@@ -106,7 +106,7 @@ impl Display for Relation {
                 rel_str.push_str(&fields);
                 rel_str.push('}');
                 return write!(f, "{}", rel_str); // Early return as we don't need edge/target for
-                                // field collection
+                                                 // field collection
             }
         }
 
@@ -124,10 +124,7 @@ impl Display for Relation {
                 let conditions: Vec<String> = self
                     .conditions
                     .iter()
-                    .enumerate()
-                    .map(|(_i, (field, op, value))| {
-                        format!("{} {} {}", field, String::from(op.clone()), value)
-                    })
+                    .map(|(field, op, value)| format!("{} {} {}", field, String::from(*op), value))
                     .collect();
                 clauses.push(format!("WHERE {}", conditions.join(" AND ")));
             }
@@ -193,7 +190,6 @@ impl<T: HasProjections> GraphTraversal for T {
             .push(Projection::Relation(Relation::new(rel_type, edge, target)));
         self
     }
-
 
     fn recursive(mut self, depth: RecursiveDepth) -> Self {
         if let Some(Projection::Relation(relation)) = self.projections_mut().last_mut() {

@@ -1,7 +1,7 @@
-use std::fmt;
-use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt;
+use std::fmt::Display;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub enum SqlValue {

@@ -1,6 +1,6 @@
-use rand::{thread_rng, Rng};
-use uuid::{Uuid, Bytes};
 use crate::types::{RecordType, SurrealId};
+use rand::{thread_rng, Rng};
+use uuid::{Bytes, Uuid};
 
 impl<T: RecordType> From<Uuid> for SurrealId<T> {
     fn from(uuid: Uuid) -> Self {
@@ -15,7 +15,6 @@ impl<T: RecordType> TryFrom<SurrealId<T>> for Uuid {
         Uuid::parse_str(id.id().to_string().as_str())
     }
 }
-
 
 impl<T: RecordType> SurrealId<T> {
     pub fn gen_v4() -> Self {

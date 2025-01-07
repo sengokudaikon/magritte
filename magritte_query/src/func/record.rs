@@ -33,7 +33,9 @@ impl Display for RecordFunction {
 }
 
 impl Callable for RecordFunction {
-    fn namespace() -> &'static str { "record" }
+    fn namespace() -> &'static str {
+        "record"
+    }
 
     fn category(&self) -> &'static str {
         match self {

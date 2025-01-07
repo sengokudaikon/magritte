@@ -3,16 +3,17 @@
 //! This module contains operations related to updating existing records in
 //! tables.
 
-use crate::{CreateStatement, FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue, SurrealDB, SurrealId};
+use crate::transaction::Transactional;
+use crate::{
+    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
+    SurrealDB, SurrealId,
+};
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tracing::{error, info, instrument};
-use crate::transaction::Transactional;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Content {
@@ -39,6 +40,27 @@ where
     return_type: Option<ReturnType>,
     in_transaction: bool,
     _marker: PhantomData<T>,
+}
+
+impl<T> Default for UpdateStatement<T>
+where
+    T: RecordType,
+{
+    fn default() -> Self {
+        Self {
+            targets: None,
+            with_id: None,
+            only: false,
+            content: None,
+            conditions: vec![],
+            parameters: vec![],
+            parallel: false,
+            timeout: None,
+            return_type: None,
+            in_transaction: false,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<T> UpdateStatement<T>
@@ -85,19 +107,7 @@ where
     }
 
     pub fn new() -> Self {
-        Self {
-            targets: None,
-            with_id: None,
-            only: false,
-            content: None,
-            conditions: vec![],
-            parameters: vec![],
-            parallel: false,
-            timeout: None,
-            return_type: Default::default(),
-            in_transaction: false,
-            _marker: PhantomData,
-        }
+        Self::default()
     }
 
     pub fn build(&self) -> Result<String> {
@@ -167,9 +177,7 @@ where
             let conditions: Vec<String> = self
                 .conditions
                 .iter()
-                .map(|(field, op, value)| {
-                    format!("{} {} {}", field, String::from(op.clone()), value)
-                })
+                .map(|(field, op, value)| format!("{} {} {}", field, String::from(*op), value))
                 .collect();
             query.push_str(&conditions.join(" AND "));
         }

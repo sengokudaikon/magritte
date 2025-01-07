@@ -1,13 +1,22 @@
+use crate::types::RecordType;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::marker::PhantomData;
 use std::str::FromStr;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use surrealdb::{sql, RecordId, RecordIdKey};
-use crate::types::RecordType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordRef<T>(String, PhantomData<T>)
 where
     T: RecordType;
+impl<T> Default for RecordRef<T>
+where
+    T: RecordType,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> RecordRef<T>
 where
     T: RecordType,
@@ -88,10 +97,7 @@ where
     }
 }
 
-impl<T> Eq for SurrealId<T>
-where
-    T: RecordType
-{}
+impl<T> Eq for SurrealId<T> where T: RecordType {}
 
 impl<T> std::hash::Hash for SurrealId<T>
 where
@@ -127,17 +133,26 @@ where
     }
 }
 
-impl<T> From<serde_json::Value> for SurrealId<T> where T: RecordType {
+impl<T> From<serde_json::Value> for SurrealId<T>
+where
+    T: RecordType,
+{
     fn from(value: serde_json::Value) -> Self {
         SurrealId::new(value.to_string())
     }
 }
-impl <T> From<&str> for SurrealId<T> where T: RecordType {
+impl<T> From<&str> for SurrealId<T>
+where
+    T: RecordType,
+{
     fn from(value: &str) -> Self {
         SurrealId::new(value)
     }
 }
-impl<T> FromStr for SurrealId<T> where T: RecordType {
+impl<T> FromStr for SurrealId<T>
+where
+    T: RecordType,
+{
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(SurrealId::new(s.to_string()))

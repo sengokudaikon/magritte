@@ -2,20 +2,18 @@
 //!
 //! This module contains operations related to creating new records in tables.
 
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::{FromTarget, RangeTarget, RecordType, ReturnType, Returns, SelectStatement, SurrealId};
+use crate::transaction::Transactional;
+use crate::{FromTarget, RangeTarget, RecordType, ReturnType, Returns, SurrealId};
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::{error, info, instrument};
-use crate::transaction::Transactional;
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -207,7 +205,7 @@ where
 
     /// Execute the CREATE query
     #[instrument(skip_all)]
-    async fn execute(mut self, conn: Arc<Surreal<Any>>) -> Result<Vec<T>> {
+    async fn execute(self, conn: Arc<Surreal<Any>>) -> Result<Vec<T>> {
         let query = self.build()?;
         info!("Executing query: {}", query);
         let mut surreal_query = conn.query(query);

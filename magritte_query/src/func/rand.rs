@@ -85,7 +85,9 @@ impl Display for RandFunction {
 }
 
 impl Callable for RandFunction {
-    fn namespace() -> &'static str { "rand" }
+    fn namespace() -> &'static str {
+        "rand"
+    }
 
     fn category(&self) -> &'static str {
         match self {

@@ -38,4 +38,3 @@ impl Index {
         IndexDeleteStatement::new()
     }
 }
-

@@ -23,7 +23,9 @@ impl Display for SleepFunction {
 }
 
 impl Callable for SleepFunction {
-    fn namespace() -> &'static str { "sleep" }
+    fn namespace() -> &'static str {
+        "sleep"
+    }
 
     fn category(&self) -> &'static str {
         "control" // Sleep is a control flow function

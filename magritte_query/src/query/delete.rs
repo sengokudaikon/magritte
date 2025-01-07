@@ -2,18 +2,19 @@
 //!
 //! This module contains operations related to deleting records from tables.
 
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use crate::{CreateStatement, FromTarget, HasConditions, HasParams, Operator, RangeTarget, RecordType, ReturnType, Returns, SqlValue, SurrealDB, SurrealId, WhereClause};
+use crate::transaction::Transactional;
+use crate::{
+    FromTarget, HasConditions, HasParams, Operator, RangeTarget, RecordType, ReturnType, Returns,
+    SqlValue, SurrealDB, SurrealId, WhereClause,
+};
 use anyhow::{anyhow, bail};
-use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use tracing::{error, info, instrument};
-use crate::transaction::Transactional;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeleteStatement<T>
@@ -137,9 +138,7 @@ where
             let conditions: Vec<String> = self
                 .conditions
                 .iter()
-                .map(|(field, op, value)| {
-                    format!("{} {} {}", field, String::from(op.clone()), value)
-                })
+                .map(|(field, op, value)| format!("{} {} {}", field, String::from(*op), value))
                 .collect();
             query.push_str(&conditions.join(" AND "));
         }
@@ -306,9 +305,7 @@ where
                 .inner
                 .conditions
                 .iter()
-                .map(|(field, op, value)| {
-                    format!("{} {} {}", field, String::from(op.clone()), value)
-                })
+                .map(|(field, op, value)| format!("{} {} {}", field, String::from(*op), value))
                 .collect();
             query.push_str(&conditions.join(" AND "));
         }

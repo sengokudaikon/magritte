@@ -29,7 +29,9 @@ impl Display for ValueFunction {
 }
 
 impl Callable for ValueFunction {
-    fn namespace() -> &'static str { "value" }
+    fn namespace() -> &'static str {
+        "value"
+    }
 
     fn category(&self) -> &'static str {
         match self {

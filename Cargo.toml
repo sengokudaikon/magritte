@@ -5,20 +5,31 @@ edition = "2021"
 description = "A powerful ORM with QueryBuilder for SurrealDB, inspired by SeaORM"
 authors = ["Daniil Zavrin <hanamik0@proton.me>"]
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/sengokudaikon/magritte"
+documentation = "https://docs.rs/magritte"
+readme = "README.md"
+keywords = ["surrealdb", "database", "orm"]
+categories = ["database", "development-tools"]
 
 [dependencies]
-inherent = "1.0.11"
 async-stream = { version = "0.3", default-features = false }
+async_executors = "0.7.0"
+async-channel = "2.3.1"
 async-trait = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3.17", default-features = false, features = ["env-filter", "fmt"] }
 sha2 = "0.10.8"
-tokio = { version = "1.41.1", features = ["full"]}
+tokio = { version = "1.41.1", features = ["full"], optional = true}
+tokio-util ={ version = "0.7.13", features = ["full"], optional = true}
+structured-spawn = { version = "1.0.1",optional = true }
 magritte_macros = { version = "0", path = "magritte_macros", default-features = false }
 magritte_query = { version = "0", path = "magritte_query", default-features = false }
 surrealdb = { version = "2", features = ["default","scripting",] }
 futures = { version = "0.3", default-features = false, features = ["std", "thread-pool"] }
 futures-util = { version = "0.3.31",features = ["std"] }
 log = { version = "0.4", default-features = false }
+may = { version = "0.3.48",features = ["default"] }
+glommio = { version = "0.9.0",features = ["debugging"],optional = true }
+async-std = { version = "1.13.0",features = ["default", "attributes"],optional = true }
 moka = { version = "0.12.8",features = ["default","future"] }
 deadpool = { version = "0.12.1", features = ["rt_tokio_1", "serde"] }
 tracing = { version = "0.1", default-features = false, features = ["attributes", "log"] }
@@ -35,8 +46,8 @@ geo = { version = "0.29.2",optional = true }
 uuid = { version = "1.11.0", features = ["v4","v6"], optional = true }
 
 inventory = "0.3.15"
-bincode = "1.3.3"
-once_cell = "1.20.2"
+cfg-if = "1.0.0"
+num_cpus = "1.16.0"
 [dev-dependencies]
 criterion = "0.5.1"
 inferno = "0"
@@ -71,5 +82,8 @@ with-uuid = ["uuid", "magritte_macros/uuid", "magritte_query/uuid"]
 with-time = ["time", "magritte_query/with-time", "magritte_macros/with-time"]
 with-native-tls = ["surrealdb/native-tls"]
 with-rustls = ["surrealdb/rustls",]
+rt-tokio = ["tokio", "structured-spawn", "tokio-util"]
+rt-async-std = ["async-std"]
+rt-glommio = ["glommio"]
 tests-cfg = ["serde/derive",]
 full = ["default", "with-rustls"]

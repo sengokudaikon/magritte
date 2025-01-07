@@ -1,8 +1,5 @@
-
 use crate::query_result::{FromTarget, QueryResult};
 use crate::types::{RecordType, SurrealId};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use crate::SelectStatement;
 
 pub trait FromClause<T>

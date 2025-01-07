@@ -1,6 +1,8 @@
 use crate::{ColumnTrait, EdgeTrait, EventTrait, HasEvents, HasIndexes, IndexTrait, TableTrait};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Debug;
+use serde::de::DeserializeOwned;
 use tracing::event;
 
 // Basic table snapshot structure, can be extended as needed
@@ -29,22 +31,8 @@ impl TableSnapshot {
         Self {
             name,
             define_table_statement,
-            fields: HashMap::new(),
-            indexes: HashMap::new(),
-            events: HashMap::new(),
+            ..Default::default()
         }
-    }
-
-    pub fn add_field(&mut self, field_name: String, field: String) {
-        self.fields.insert(field_name, field);
-    }
-
-    pub fn add_index(&mut self, index_name: String, index: String) {
-        self.indexes.insert(index_name, index);
-    }
-
-    pub fn add_event(&mut self, event_name: String, event: String) {
-        self.events.insert(event_name, event);
     }
 }
 
@@ -73,24 +61,44 @@ impl EdgeSnapshot {
         Self {
             name,
             define_edge_statement,
-            fields: HashMap::new(),
-            indexes: HashMap::new(),
-            events: HashMap::new(),
+            ..Default::default()
         }
     }
 
+}
 
-    pub fn add_field(&mut self, field_name: String, field: String) {
+impl Snapshot for TableSnapshot {
+    fn add_field(&mut self, field_name: String, field: String) {
         self.fields.insert(field_name, field);
     }
 
-    pub fn add_index(&mut self, index_name: String, index: String) {
+    fn add_index(&mut self, index_name: String, index: String) {
         self.indexes.insert(index_name, index);
     }
 
-    pub fn add_event(&mut self, event_name: String, event: String) {
+    fn add_event(&mut self, event_name: String, event: String) {
         self.events.insert(event_name, event);
     }
+}
+
+impl Snapshot for EdgeSnapshot {
+    fn add_field(&mut self, field_name: String, field: String) {
+        self.fields.insert(field_name, field);
+    }
+
+    fn add_index(&mut self, index_name: String, index: String) {
+        self.indexes.insert(index_name, index);
+    }
+
+    fn add_event(&mut self, event_name: String, event: String) {
+        self.events.insert(event_name, event);
+    }
+}
+
+pub trait Snapshot: Debug + Clone + Serialize + DeserializeOwned{
+    fn add_field(&mut self, field_name: String, field: String);
+    fn add_index(&mut self, index_name: String, index: String);
+    fn add_event(&mut self, event_name: String, event: String);
 }
 
 // Full database schema snapshot
@@ -142,8 +150,7 @@ where
         name: T::table_name().to_string(),
         define_table_statement: define_table,
         fields,
-        indexes: HashMap::new(),
-        events: HashMap::new(),
+        ..Default::default()
     };
 
     Ok(snapshot)

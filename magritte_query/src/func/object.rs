@@ -35,7 +35,9 @@ impl Display for ObjectFunction {
 }
 
 impl Callable for ObjectFunction {
-    fn namespace() -> &'static str { "object" }
+    fn namespace() -> &'static str {
+        "object"
+    }
 
     fn category(&self) -> &'static str {
         match self {

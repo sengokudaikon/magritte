@@ -20,7 +20,9 @@ impl Display for BytesFunction {
 }
 
 impl Callable for BytesFunction {
-    fn namespace() -> &'static str { "bytes" }
+    fn namespace() -> &'static str {
+        "bytes"
+    }
 
     fn category(&self) -> &'static str {
         match self {

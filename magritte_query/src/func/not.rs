@@ -23,9 +23,13 @@ impl Display for NotFunction {
 }
 
 impl Callable for NotFunction {
-    fn namespace() -> &'static str { "not" }
+    fn namespace() -> &'static str {
+        "not"
+    }
 
-    fn category(&self) -> &'static str { "logical" }
+    fn category(&self) -> &'static str {
+        "logical"
+    }
 
     fn can_filter(&self) -> bool {
         true // Not function returns boolean and can be used in WHERE

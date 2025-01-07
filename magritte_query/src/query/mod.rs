@@ -1,6 +1,6 @@
 use crate::{RecordType, SurrealDB};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use surrealdb::Response;
+
 pub mod alter;
 pub mod create;
 pub mod delete;
@@ -52,7 +52,7 @@ where
     UpdateStatement(UpdateStatement<T>),
     DeleteStatement(DeleteStatement<T>),
     UpsertStatement(UpsertStatement<T>),
-    RelateStatement(RelateStatement),
+    RelateStatement(Box<RelateStatement>),
 }
 
 impl Query {
@@ -104,7 +104,7 @@ impl Query {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TransactionStatement {
     statements: Vec<String>,
 }
@@ -112,7 +112,7 @@ pub struct TransactionStatement {
 impl TransactionStatement {
     pub fn new() -> Self {
         Self {
-            statements: vec!["BEGIN TRANSACTION".to_string()],
+            statements: vec!["BEGIN TRANSACTION;".to_string()],
         }
     }
 
@@ -127,22 +127,24 @@ impl TransactionStatement {
     }
 
     pub fn commit(mut self) -> Self {
-        self.statements.push("COMMIT TRANSACTION".to_string());
+        self.statements.push("COMMIT TRANSACTION;".to_string());
         self
     }
 
     pub fn rollback(mut self) -> Self {
-        self.statements.push("CANCEL TRANSACTION".to_string());
+        self.statements.push("CANCEL TRANSACTION;".to_string());
         self
     }
 
     pub fn build(&self) -> String {
-        self.statements.join("; ") + ";"
+        self.statements
+            .join("; ")
+            .replace(";;", ";")
+            .replace("; ;", ";")
     }
 
-    pub async fn execute(self, db: &SurrealDB) -> anyhow::Result<()> {
-        db.query(self.build()).await?;
-        Ok(())
+    pub async fn execute(self, db: &SurrealDB) -> surrealdb::Result<Response> {
+        db.query(self.build()).await?.check()
     }
 }
 

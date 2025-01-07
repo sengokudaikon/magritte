@@ -73,7 +73,9 @@ impl Display for DurationFunction {
 }
 
 impl Callable for DurationFunction {
-    fn namespace() -> &'static str { "duration" }
+    fn namespace() -> &'static str {
+        "duration"
+    }
 
     fn category(&self) -> &'static str {
         match self {
