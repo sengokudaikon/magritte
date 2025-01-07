@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use anyhow::Result;
-use may::config::{Config as MayConfig, GuardContext};
-use parking_lot::RwLock;
+use futures_util::AsyncWriteExt;
+use may::Config;
+use crate::database::rw::RwLock;
 
 /// Runtime type for query execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,7 +43,7 @@ impl Default for RuntimeConfig {
 /// Runtime manager that handles thread allocation and runtime initialization
 pub struct RuntimeManager {
     config: RuntimeConfig,
-    may_config: Arc<RwLock<Option<MayConfig>>>,
+    may_config: Arc<RwLock<Option<Config>>>,
 }
 
 impl RuntimeManager {
@@ -54,30 +55,28 @@ impl RuntimeManager {
     }
     
     /// Initialize the runtime with dedicated threads
-    pub fn initialize(&self) -> Result<()> {
+    pub fn initialize(&mut self) -> Result<()> {
         match self.config.runtime_type {
             RuntimeType::May => {
                 // Configure May runtime for cooperative scheduling
-                let mut config = MayConfig::default();
+                let mut config = Config;
                 
                 // Set number of worker threads
                 config.set_workers(self.config.dedicated_threads);
                 
                 // Set stack size for coroutines
                 config.set_stack_size(self.config.coroutine_stack_size);
-                
-                // Disable work stealing for cooperative scheduling
-                config.disable_work_stealing();
-                
-                // Set scheduling parameters for cooperative mode
-                config.set_io_workers(self.config.dedicated_threads);
+
                 config.set_pool_capacity(self.config.max_coroutines_per_thread * self.config.dedicated_threads);
                 
                 // Store config for later use
-                *self.may_config.write() = Some(config.clone());
-                
-                // Initialize May runtime
-                may::config().set_config(&config);
+                *self.may_config = RwLock::new(Some(config));
+
+                Ok(())
+            }
+            RuntimeType::AsyncStd => {
+                // For AsyncStd, we'll just use the existing runtime
+                // but limit the number of threads in the executor
                 Ok(())
             }
             RuntimeType::Tokio => {
@@ -93,16 +92,8 @@ impl RuntimeManager {
     }
     
     /// Get the May runtime configuration if available
-    pub fn may_config(&self) -> Option<MayConfig> {
-        self.may_config.read().clone()
-    }
-    
-    /// Create a new coroutine guard for May runtime
-    pub fn create_guard(&self) -> Option<GuardContext> {
-        match self.config.runtime_type {
-            RuntimeType::May => Some(GuardContext::new()),
-            _ => None,
-        }
+    pub fn may_config(&self) -> Result<Option<Config>> {
+        Ok(self.may_config.read()?.clone())
     }
     
     /// Get the number of dedicated threads

@@ -27,7 +27,7 @@ surrealdb = { version = "2", features = ["default","scripting",] }
 futures = { version = "0.3", default-features = false, features = ["std", "thread-pool"] }
 futures-util = { version = "0.3.31",features = ["std"] }
 log = { version = "0.4", default-features = false }
-may = { version = "0.3.48",features = ["default"] }
+may = { version = "0.3.48",features = ["default"],optional = true }
 glommio = { version = "0.9.0",features = ["debugging"],optional = true }
 async-std = { version = "1.13.0",features = ["default", "attributes"],optional = true }
 moka = { version = "0.12.8",features = ["default","future"] }
@@ -80,10 +80,12 @@ with-rust_decimal = ["rust_decimal", "magritte_query/with-rust_decimal", "magrit
 with-bigdecimal = ["bigdecimal", "magritte_macros/with-bigdecimal", "magritte_query/with-bigdecimal"]
 with-uuid = ["uuid", "magritte_macros/uuid", "magritte_query/uuid"]
 with-time = ["time", "magritte_query/with-time", "magritte_macros/with-time"]
+with-geo = ["geo", "magritte_query/with-geo", "magritte_macros/with-geo"]
 with-native-tls = ["surrealdb/native-tls"]
 with-rustls = ["surrealdb/rustls",]
 rt-tokio = ["tokio", "structured-spawn", "tokio-util"]
 rt-async-std = ["async-std"]
 rt-glommio = ["glommio"]
+rt-may = ["may"]
 tests-cfg = ["serde/derive",]
 full = ["default", "with-rustls"]

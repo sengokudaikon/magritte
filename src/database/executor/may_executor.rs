@@ -2,12 +2,12 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use may::coroutine;
-use may::sync::{mpsc::{channel, Receiver as MayReceiver, Sender as MaySender}, Semaphore};
+use may::sync::{mpsc::{channel, Receiver as MayReceiver, Sender as MaySender}};
 use serde::de::DeserializeOwned;
-use crate::rw::RwLock;
 use crate::database::executor::{Executor, ExecutorConfig, ExecutorMetrics, QueryRequest};
 use crate::database::pool::connection::{SurrealConnection, SurrealConnectionManager};
 use crate::database::runtime::{RuntimeManager, RuntimeType};
+use crate::database::rw::RwLock;
 use crate::database::scheduler::{QueryPriority, QueryType};
 use crate::query::{Query, TransactionStatement};
 
@@ -46,7 +46,7 @@ impl MayExecutor {
         
         // Update metrics
         {
-            let mut metrics = self.metrics.write();
+            let mut metrics = self.metrics.write()?;
             metrics.active_connections += 1;
         }
         
@@ -61,12 +61,12 @@ impl MayExecutor {
         
         // Execute transaction with timeout using channels
         let start = std::time::Instant::now();
-        let result = {
+        let mut result = {
             let (tx, rx) = channel();
             let query_future = conn.query(&sql);
             
             // Use scope to ensure coroutines are cleaned up
-            coroutine::scope(|scope| {
+            coroutine::scope(|scope| unsafe {
                 // Spawn timeout coroutine
                 let timeout = self.config.query_timeout;
                 scope.spawn(move || {
@@ -76,7 +76,7 @@ impl MayExecutor {
                 });
                 
                 // Spawn query execution coroutine
-                scope.spawn(move || {
+                scope.spawn(async move || {
                     match query_future.await {
                         Ok(result) => {
                             let _ = tx.send(Ok(result));
@@ -86,7 +86,7 @@ impl MayExecutor {
                         }
                     }
                     coroutine::yield_now();
-                });
+                }.await);
             });
             
             // Wait for either query completion or timeout
@@ -103,7 +103,7 @@ impl MayExecutor {
         
         // Update metrics
         {
-            let mut metrics = self.metrics.write();
+            let mut metrics = self.metrics.write()?;
             metrics.active_connections -= 1;
             metrics.queries_executed += queries.len();
             metrics.avg_query_time = (metrics.avg_query_time * (metrics.queries_executed - queries.len()) as f64
@@ -166,12 +166,14 @@ impl Executor for MayExecutor {
             for (_, group) in priority_groups {
                 let tx = tx.clone();
                 let executor = executor.clone();
-                
-                scope.spawn(move || {
-                    let result = executor.batch_execute(group);
-                    let _ = tx.send(result);
-                    coroutine::yield_now();
-                });
+
+                unsafe {
+                    scope.spawn(move || {
+                        let result = executor.batch_execute(group);
+                        let _ = tx.send(result);
+                        coroutine::yield_now();
+                    });
+                }
             }
         });
         
@@ -206,8 +208,8 @@ impl Executor for MayExecutor {
         Ok(())
     }
     
-    async fn metrics(&self) -> ExecutorMetrics {
-        self.metrics.read().clone()
+    async fn metrics(&self) -> Result<ExecutorMetrics> {
+        Ok(self.metrics.read()?.clone())
     }
 }
 
@@ -219,7 +221,7 @@ impl Clone for MayExecutor {
             metrics: self.metrics.clone(),
             runtime: self.runtime.clone(),
             shutdown_tx: self.shutdown_tx.clone(),
-            shutdown_rx: self.shutdown_rx.clone(),
+            shutdown_rx: self.shutdown_rx.iter().cloned().collect(),
         }
     }
 }

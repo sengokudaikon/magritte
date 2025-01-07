@@ -7,7 +7,7 @@ use crate::database::pool::connection::SurrealConnection;
 use crate::query::Query;
 
 /// Query priority levels for scheduling
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum QueryPriority {
     Low,
     Normal,

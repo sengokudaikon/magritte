@@ -21,7 +21,6 @@ name = "magritte_query"
 path = "src/lib.rs"
 
 [dependencies]
-inherent = "1.0"
 serde_json = { version = "1", default-features = false, optional = false, features = ["std"] }
 tracing = "0.1.41"
 async-trait = "0.1.83"
@@ -38,7 +37,6 @@ chrono = { version = "0.4", features = ["serde"], optional = true }
 time = { version = "0.3.36", optional = true }
 rand = { version = "0.8.5",features = ["default", "serde1"] }
 futures = "0.3.31"
-syn = "2.0.89"
 
 [features]
 thread-safe = []
@@ -50,3 +48,5 @@ with-chrono = ["default", "chrono"]
 with-time = ["default", "time"]
 with-rust_decimal = ["default", "rust_decimal"]
 with-bigdecimal = ["default", "bigdecimal"]
+with-uuid = ["default", "uuid"]
+with-geo = ["default", "geo"]
