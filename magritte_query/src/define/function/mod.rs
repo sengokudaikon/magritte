@@ -86,7 +86,7 @@ impl Display for FunctionArg {
 
 /// Access permissions for functions
 #[derive(Clone, Debug)]
-pub enum Permission {
+pub enum FnPermission {
     /// No access for record users
     None,
     /// Full access for record users
@@ -95,12 +95,12 @@ pub enum Permission {
     Where(String),
 }
 
-impl Display for Permission {
+impl Display for FnPermission {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Permission::None => write!(f, "NONE"),
-            Permission::Full => write!(f, "FULL"),
-            Permission::Where(condition) => write!(f, "WHERE {}", condition),
+            FnPermission::None => write!(f, "NONE"),
+            FnPermission::Full => write!(f, "FULL"),
+            FnPermission::Where(condition) => write!(f, "WHERE {}", condition),
         }
     }
 }
@@ -111,7 +111,7 @@ pub struct DefineFunctionStatement {
     pub(crate) name: Option<String>,
     pub(crate) args: Vec<FunctionArg>,
     pub(crate) query: Option<String>,
-    pub(crate) permissions: Option<Permission>,
+    pub(crate) permissions: Option<FnPermission>,
     pub(crate) overwrite: bool,
     pub(crate) if_not_exists: bool,
     pub(crate) comment: Option<String>,
@@ -154,7 +154,7 @@ impl DefineFunctionStatement {
     }
 
     /// Sets the function permissions
-    pub fn permissions(mut self, permissions: Permission) -> Self {
+    pub fn permissions(mut self, permissions: FnPermission) -> Self {
         self.permissions = Some(permissions);
         self
     }
@@ -306,7 +306,7 @@ mod tests {
         let stmt = DefineFunctionStatement::new()
             .name("fetchAllProducts")
             .query("RETURN (SELECT * FROM product LIMIT 10);")
-            .permissions(Permission::Where("$auth.admin = true".into()))
+            .permissions(FnPermission::Where("$auth.admin = true".into()))
             .build()
             .unwrap();
         assert!(stmt.contains("PERMISSIONS WHERE $auth.admin = true"));

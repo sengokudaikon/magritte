@@ -57,6 +57,8 @@ impl SurrealDB {
                     executor::async_std_executor::AsyncStdExecutor::new(executor_config, pool, runtime)?,
                 ));
             }
+
+            unreachable!("No runtime was selected")
         }()?;
 
         // Start executor
