@@ -1,7 +1,8 @@
 use std::time::Duration;
 
+use crate::database::{QueryType, SurrealDB};
 use crate::transaction::Transactional;
-use crate::{ReturnType, Returns, SurrealDB};
+use crate::{ReturnType, Returns};
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
@@ -131,16 +132,8 @@ impl RelateStatement {
         Ok(query)
     }
 
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        let query = self.build()?;
-        let surreal_query = conn.query(query);
-
-        // Execute query and handle response
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => Err(anyhow::anyhow!(e)),
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        conn.execute(self.build()?, vec![], QueryType::Write).await
     }
 }
 

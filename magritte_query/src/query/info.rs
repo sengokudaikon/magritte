@@ -1,10 +1,11 @@
-use crate::SurrealDB;
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
-use surrealdb::Value;
+use surrealdb::{Surreal, Value};
+use surrealdb::engine::any::Any;
 use tracing::instrument;
+use crate::database::SurrealDB;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DbInfo {
@@ -29,10 +30,10 @@ pub struct TableInfo {
 
 #[derive(Clone, Debug)]
 pub struct InfoStatement {
-    conn: SurrealDB,
+    conn: Surreal<Any>,
 }
 impl InfoStatement {
-    pub fn new(conn: SurrealDB) -> Self {
+    pub fn new(conn: Surreal<Any>) -> Self {
         Self { conn }
     }
     /// Get root level info (namespaces and users)

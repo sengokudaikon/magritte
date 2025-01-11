@@ -5,7 +5,7 @@ pub mod backend;
 pub mod define;
 pub mod func;
 pub mod query;
-pub type SurrealDB = std::sync::Arc<surrealdb::Surreal<surrealdb::engine::any::Any>>;
+pub mod database;
 
 pub use backend::*;
 pub use define::*;

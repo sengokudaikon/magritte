@@ -1,13 +1,13 @@
+use crate::database::{QueryType, SurrealDB};
 use crate::{
     FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
-    SurrealDB, SurrealId,
+    SurrealId,
 };
-use anyhow::anyhow;
 use serde::Serialize;
 use serde_json::Value;
 use std::marker::PhantomData;
 use std::time::Duration;
-use tracing::{error, info, instrument};
+use tracing::instrument;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -204,25 +204,8 @@ where
         Ok(query)
     }
 
-    async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<T>> {
-        let query = self.build()?;
-        info!("Executing query: {}", query);
-
-        let mut surreal_query = conn.query(query);
-
-        // Bind all parameters
-        for (name, value) in self.parameters {
-            surreal_query = surreal_query.bind((name, value));
-        }
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
+        conn.execute(self.build()?, self.parameters, QueryType::Write).await
     }
 }
 impl<T> Returns for UpsertStatement<T>

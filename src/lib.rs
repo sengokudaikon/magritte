@@ -3,16 +3,12 @@
 #![feature(const_type_id)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
-#![cfg_attr(feature = "coroutines", feature(coroutines))]
-#![cfg_attr(feature = "coroutines", feature(coroutine_trait))]
-#![cfg_attr(feature = "coroutines", feature(stmt_expr_attributes))]
 //! Magritte - A powerful QueryBuilder for SurrealDB
 //!
 //! Named after René Magritte, a Belgian surrealist artist.
 //! This crate provides a type-safe query
 //! builder for SurrealDB with enhanced schema support.
 
-mod database;
 mod defs;
 pub mod entity;
 pub mod entity_crud;

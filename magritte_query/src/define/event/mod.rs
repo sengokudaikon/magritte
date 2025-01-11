@@ -9,10 +9,10 @@
 //! # Example
 //!
 //! ```rust
-//! use magritte_query::define::event::DefineEventStatement;
+//! use magritte_query::define::*;
 //!
 //! // Define an event that logs email changes
-//! let stmt = DefineEventStatement::new()
+//! let stmt = Define::event()
 //!     .name("email_change")
 //!     .table("user")
 //!     .when("$before.email != $after.email")
@@ -28,7 +28,7 @@
 //! - Selected namespace and database before using the statement
 //! - Note: Events are not triggered during data import operations
 
-use crate::SurrealDB;
+use crate::database::{QueryType, SurrealDB};
 use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use tracing::{error, info};
@@ -188,24 +188,8 @@ impl DefineEventStatement {
     }
 
     /// Executes the event definition statement on the database
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        let query = self.build()?;
-        if query.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        info!("Executing query: {}", query);
-
-        let surreal_query = conn.query(query);
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        conn.execute(self.build()?, vec![], QueryType::Schema).await
     }
 }
 

@@ -1,9 +1,10 @@
 use crate::define_table::AsSelect;
-use crate::{EdgeType, Permission, SchemaType, SurrealDB, TableType};
+use crate::{EdgeType, Permission, SchemaType, TableType};
 use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use std::time::Duration;
 use tracing::{error, info};
+use crate::database::{QueryType, SurrealDB};
 
 #[derive(Clone, Debug)]
 pub struct DefineEdgeStatement<T: EdgeType> {
@@ -235,20 +236,8 @@ where
         Ok(stmt)
     }
 
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<T>> {
-        let query = self.build()?;
-        info!("Executing query: {}", query);
-
-        let surreal_query = conn.query(query);
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
+        conn.execute(self.build()?, vec![], QueryType::Schema).await
     }
 }
 

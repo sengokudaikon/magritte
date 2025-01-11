@@ -1,10 +1,6 @@
-use std::sync::Arc;
 use anyhow::Result;
-use async_channel::{bounded, Receiver, Sender};
-use serde::de::DeserializeOwned;
+use async_channel::Sender;
 use serde_json::Value;
-use crate::database::pool::connection::SurrealConnection;
-use crate::query::Query;
 
 /// Query priority levels for scheduling
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -80,13 +76,13 @@ impl Default for SchedulerConfig {
 pub trait Scheduler: Send + Sync + 'static {
     /// Schedule a query for execution
     async fn schedule(&self, query: ScheduledQuery) -> Result<()>;
-    
+
     /// Start the scheduler
     async fn start(&self) -> Result<()>;
-    
+
     /// Stop the scheduler
     async fn stop(&self) -> Result<()>;
-    
+
     /// Get scheduler metrics
     async fn metrics(&self) -> SchedulerMetrics;
 }
@@ -102,4 +98,4 @@ pub struct SchedulerMetrics {
     pub completed_writes: usize,
     pub failed_reads: usize,
     pub failed_writes: usize,
-} 
+}

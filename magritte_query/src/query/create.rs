@@ -14,6 +14,7 @@ use serde::Serialize;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::{error, info, instrument};
+use crate::database::{QueryType, SurrealDB};
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -205,24 +206,8 @@ where
 
     /// Execute the CREATE query
     #[instrument(skip_all)]
-    async fn execute(self, conn: Arc<Surreal<Any>>) -> Result<Vec<T>> {
-        let query = self.build()?;
-        info!("Executing query: {}", query);
-        let mut surreal_query = conn.query(query);
-
-        // Bind all parameters
-        for (name, value) in self.parameters {
-            surreal_query = surreal_query.bind((name, value));
-        }
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    async fn execute(self, conn: &SurrealDB) -> Result<Vec<T>> {
+        conn.execute(self.build()?, self.parameters, QueryType::Write).await
     }
 }
 

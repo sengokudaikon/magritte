@@ -9,10 +9,10 @@
 //! # Example
 //!
 //! ```rust
-//! use magritte_query::define::function::{DefineFunctionStatement, FunctionArg, Permission};
+//! use magritte_query::define::*;
 //!
 //! // Define a function that checks if a relation exists
-//! let stmt = DefineFunctionStatement::new()
+//! let stmt = Define::function()
 //!     .name("relation_exists")
 //!     .args(vec![
 //!         FunctionArg::new("in", "record"),
@@ -32,10 +32,10 @@
 //! - Authentication as root owner/editor, namespace owner/editor, or database owner/editor
 //! - Selected namespace and database before using the statement
 
-use crate::SurrealDB;
 use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use tracing::{error, info};
+use crate::database::{QueryType, SurrealDB};
 
 /// Function argument definition
 #[derive(Clone, Debug)]
@@ -240,20 +240,8 @@ impl DefineFunctionStatement {
     }
 
     /// Executes the function definition statement on the database
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        let query = self.build()?;
-        info!("Executing query: {}", query);
-
-        let surreal_query = conn.query(query);
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        conn.execute(self.build()?, vec![], QueryType::Schema).await
     }
 }
 

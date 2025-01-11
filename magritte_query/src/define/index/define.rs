@@ -1,7 +1,7 @@
-use crate::{IndexSpecifics, SurrealDB};
-use anyhow::{anyhow, bail};
+use crate::database::{QueryType, SurrealDB};
+use crate::IndexSpecifics;
+use anyhow::bail;
 use std::fmt::Display;
-use tracing::{error, info};
 
 #[derive(Default, Debug, Clone)]
 pub struct DefineIndexStatement {
@@ -142,23 +142,8 @@ impl DefineIndexStatement {
         Ok(stmt)
     }
 
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        let query = self.build()?;
-        if query.is_empty() {
-            return Ok(vec![]);
-        }
-        info!("Executing query: {}", query);
-
-        let surreal_query = conn.query(query);
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        conn.execute(self.build()?, vec![], QueryType::Schema).await
     }
 }
 

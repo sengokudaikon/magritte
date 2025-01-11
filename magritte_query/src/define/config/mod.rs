@@ -8,10 +8,10 @@
 //! # Example
 //!
 //! ```rust
-//! use magritte_query::define::config::{DefineConfigStatement, TableConfig, FunctionConfig};
+//! use magritte_query::define::*;
 //!
 //! // Define GraphQL configuration with specific tables and functions
-//! let config = DefineConfigStatement::new()
+//! let config = Define::config()
 //!     .tables(TableConfig::Include(vec!["user".into(), "post".into()]))
 //!     .functions(FunctionConfig::Auto)
 //!     .build()
@@ -25,7 +25,7 @@
 //! - At least one table defined in the database
 //! - SurrealDB instance started with `SURREAL_EXPERIMENTAL_GRAPHQL=true`
 
-use crate::SurrealDB;
+use crate::database::{QueryType, SurrealDB};
 use anyhow::anyhow;
 use std::fmt::Display;
 use tracing::{error, info};
@@ -149,20 +149,8 @@ impl DefineConfigStatement {
     }
 
     /// Executes the GraphQL configuration statement on the database
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        let query = self.build()?;
-        info!("Executing query: {}", query);
-
-        let surreal_query = conn.query(query);
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        conn.execute(self.build()?, vec![], QueryType::Schema).await
     }
 }
 

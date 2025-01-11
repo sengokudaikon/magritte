@@ -1,5 +1,5 @@
-use crate::{RecordType, SurrealDB};
-use surrealdb::Response;
+use crate::RecordType;
+use surrealdb::{Response, Surreal};
 
 pub mod alter;
 pub mod create;
@@ -11,6 +11,7 @@ pub mod select;
 pub mod update;
 pub mod upsert;
 
+use crate::database::{QueryType, SurrealDB};
 pub use alter::*;
 pub use create::*;
 pub use delete::*;
@@ -18,6 +19,8 @@ pub use info::*;
 pub use insert::*;
 pub use relate::*;
 pub use select::*;
+use surrealdb::engine::any::Any;
+use surrealdb::opt::auth::Database;
 pub use update::*;
 pub use upsert::*;
 
@@ -94,7 +97,7 @@ impl Query {
         UpsertStatement::new()
     }
 
-    pub fn info(db: SurrealDB) -> InfoStatement {
+    pub fn info(db: Surreal<Any>) -> InfoStatement {
         InfoStatement::new(db)
     }
 
@@ -143,7 +146,7 @@ impl TransactionStatement {
             .replace("; ;", ";")
     }
 
-    pub async fn execute(self, db: &SurrealDB) -> surrealdb::Result<Response> {
+    pub async fn execute(self, db: &Surreal<Any>) -> surrealdb::Result<Response> {
         db.query(self.build()).await?.check()
     }
 }

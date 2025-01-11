@@ -9,10 +9,10 @@
 //! # Example
 //!
 //! ```rust
-//! use magritte_query::define::analyzer::{DefineAnalyzerStatement, Tokenizer, Filter};
+//! use magritte_query::define::*;
 //!
 //! // Create a basic analyzer for English text
-//! let analyzer = DefineAnalyzerStatement::new()
+//! let analyzer = Define::analyzer()
 //!     .name("english")
 //!     .tokenizers(vec![Tokenizer::Class, Tokenizer::Camel])
 //!     .filters(vec![
@@ -32,7 +32,7 @@
 //!
 //! For more information, see [SurrealDB Requirements](https://docs.surrealdb.com/docs/surrealql/statements/define/analyzer#requirements)
 
-use crate::SurrealDB;
+use crate::database::{QueryType, SurrealDB};
 use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use tracing::{error, info};
@@ -282,10 +282,10 @@ impl Display for Filter {
 /// # Example
 ///
 /// ```rust
-/// use magritte_query::define::analyzer::{DefineAnalyzerStatement, Tokenizer, Filter};
+/// use magritte_query::define::*;
 ///
 /// // Create an analyzer for autocomplete functionality
-/// let analyzer = DefineAnalyzerStatement::new()
+/// let analyzer = Define::analyzer()
 ///     .name("autocomplete")
 ///     .filter(Filter::Lowercase)
 ///     .filter(Filter::EdgeNGram(2, 10))
@@ -406,20 +406,8 @@ impl DefineAnalyzerStatement {
     }
 
     /// Executes the analyzer definition statement on the database
-    pub async fn execute(self, conn: SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        let query = self.build()?;
-        info!("Executing query: {}", query);
-
-        let surreal_query = conn.query(query);
-
-        let res = surreal_query.await?.take(0);
-        match res {
-            Ok(res) => Ok(res),
-            Err(e) => {
-                error!("Query execution failed: {:?}", e);
-                Err(anyhow!(e))
-            }
-        }
+    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
+        conn.execute(self.build()?, vec![], QueryType::Schema).await
     }
 }
 

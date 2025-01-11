@@ -13,6 +13,9 @@ pub(crate) mod token;
 pub(crate) mod user;
 
 use crate::define::define_table::DefineTableStatement;
+use crate::define::function::DefineFunctionStatement;
+use crate::define::namespace::DefineNamespaceStatement;
+use crate::define::user::DefineUserStatement;
 use crate::define_edge::DefineEdgeStatement;
 use crate::{EdgeType, TableType};
 pub use access::*;
@@ -21,36 +24,36 @@ pub use config::*;
 pub use database::*;
 pub use event::*;
 pub use field::*;
+pub use function::*;
 pub use index::*;
-use surrealdb::sql::statements::{
-    DefineFunctionStatement, DefineNamespaceStatement, DefineParamStatement, DefineUserStatement,
-};
+pub use namespace::*;
+pub use param::*;
 pub use table::*;
 pub use token::*;
-
+pub use user::*;
 #[derive(Debug, Clone)]
 pub struct Define;
 impl Define {
     pub fn access() -> DefineAccessStatement {
-        DefineAccessStatement::default()
+        DefineAccessStatement::new()
     }
     pub fn analyzer() -> DefineAnalyzerStatement {
-        DefineAnalyzerStatement::default()
+        DefineAnalyzerStatement::new()
     }
     pub fn config() -> DefineConfigStatement {
-        DefineConfigStatement::default()
+        DefineConfigStatement::new()
     }
     pub fn database() -> DefineDatabaseStatement {
         DefineDatabaseStatement::new()
     }
     pub fn event() -> DefineEventStatement {
-        DefineEventStatement::default()
+        DefineEventStatement::new()
     }
     pub fn field() -> DefineFieldStatement {
         DefineFieldStatement::new()
     }
     pub fn function() -> DefineFunctionStatement {
-        DefineFunctionStatement::default()
+        DefineFunctionStatement::new()
     }
     pub fn index() -> DefineIndexStatement {
         DefineIndexStatement::new()
@@ -62,10 +65,10 @@ impl Define {
         DefineEdgeStatement::new()
     }
     pub fn namespace() -> DefineNamespaceStatement {
-        DefineNamespaceStatement::default()
+        DefineNamespaceStatement::new()
     }
     pub fn param() -> DefineParamStatement {
-        DefineParamStatement::default()
+        DefineParamStatement::new()
     }
     pub fn table<T>() -> DefineTableStatement<T>
     where
@@ -74,9 +77,9 @@ impl Define {
         DefineTableStatement::new()
     }
     pub fn token() -> DefineTokenStatement {
-        DefineTokenStatement::default()
+        DefineTokenStatement::new()
     }
     pub fn user() -> DefineUserStatement {
-        DefineUserStatement::default()
+        DefineUserStatement::new()
     }
 }
