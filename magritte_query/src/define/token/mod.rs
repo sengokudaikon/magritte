@@ -27,9 +27,10 @@ use std::fmt::Display;
 use tracing::{error, info};
 
 /// Represents the different token verification types supported by SurrealDB
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub enum TokenType {
     /// HMAC algorithms
+    #[default]
     HS256,
     HS384,
     HS512,
@@ -66,12 +67,6 @@ impl Display for TokenType {
             TokenType::RS512 => write!(f, "RS512"),
             TokenType::JWKS => write!(f, "JWKS"),
         }
-    }
-}
-
-impl Default for TokenType {
-    fn default() -> Self {
-        TokenType::HS256
     }
 }
 

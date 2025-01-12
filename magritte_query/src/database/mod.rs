@@ -14,7 +14,6 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use cfg_if::cfg_if;
 
 /// Main database interface that handles connection management and query execution.
 /// Users should not interact with this directly, but through Query builders.
@@ -43,7 +42,7 @@ impl SurrealDB {
         };
 
         // Create and start executor
-        let executor = || -> Result<Arc<dyn BaseExecutor + Send + Sync>>{
+        let executor_factory = || -> Result<Arc<dyn BaseExecutor + Send + Sync>>{
             #[cfg(feature = "rt-tokio")]
             {
                 return Ok(Arc::new(
@@ -59,8 +58,8 @@ impl SurrealDB {
             }
 
             unreachable!("No runtime was selected")
-        }()?;
-
+        };
+        let executor = executor_factory()?;
         // Start executor
         executor.run().await?;
 

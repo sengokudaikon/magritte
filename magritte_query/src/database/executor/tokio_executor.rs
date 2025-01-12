@@ -1,47 +1,41 @@
 use std::sync::Arc;
 use std::time::Duration;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use async_channel::{bounded, Receiver, Sender};
 use dashmap::DashMap;
-use serde_json::Value;
+use futures::TryFutureExt;
+use serde_json::Value as JsonValue;
 use deadpool_surrealdb::{Object, Pool};
-use surrealdb::sql::Value as DbValue;
+use surrealdb::sql::Value;
+use thiserror::Error;
 
 #[cfg(feature = "rt-tokio")]
 use tokio::sync::Notify;
 #[cfg(feature = "rt-tokio")]
 use tokio::time::sleep;
 #[cfg(feature = "rt-tokio")]
-use structured_spawn::spawn;
-#[cfg(feature = "rt-tokio")]
-use structured_spawn::TaskHandle;
-
+use tokio::task::JoinHandle;
 use crate::database::executor::{BaseExecutor, ExecutorConfig, ExecutorMetrics, QueryRequest};
 use crate::database::QueryType;
 use crate::database::runtime::RuntimeManager;
 use crate::database::rw::RwLock;
-use crate::Query;
+use crate::{Query};
 
 const MAX_RETRIES: u32 = 3;
 const RETRY_DELAY_MS: u64 = 100;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum QueryError {
-    ConnectionError(anyhow::Error),
-    ExecutionError(anyhow::Error),
-    TransactionError(anyhow::Error),
-    RetryableError(anyhow::Error),
-}
-
-impl From<QueryError> for anyhow::Error {
-    fn from(error: QueryError) -> Self {
-        match error {
-            QueryError::ConnectionError(e) => anyhow!("Connection error: {}", e),
-            QueryError::ExecutionError(e) => anyhow!("Query execution error: {}", e),
-            QueryError::TransactionError(e) => anyhow!("Transaction error: {}", e),
-            QueryError::RetryableError(e) => anyhow!("Retryable error: {}", e),
-        }
-    }
+    #[error("Query error: {0}")]
+    GenericError(#[from] anyhow::Error),
+    #[error("Query timeout")]
+    Timeout,
+    #[error("Query execution error: {0}")]
+    ExecutionError(#[from] surrealdb::Error),
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
+    #[error("Retryable error: {0}")]
+    RetryableError(Box<QueryError>),
 }
 
 /// Event loop that processes queries on a dedicated connection
@@ -117,6 +111,7 @@ impl EventLoop {
                     }
                     
                     // Send response
+                    let result = result.map_err(|e| anyhow!(e));
                     if let Err(e) = request.response_tx.send(result).await {
                         tracing::error!("Failed to send query response: {}", e);
                     }
@@ -130,7 +125,7 @@ impl EventLoop {
     async fn execute_with_retries(
         &self,
         request: QueryRequest,
-    ) -> Result<Value> {
+    ) -> Result<JsonValue, QueryError> {
         let mut attempts = 0;
         let mut last_error = None;
         
@@ -146,17 +141,17 @@ impl EventLoop {
                         continue;
                     }
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e),
             }
         }
         
-        Err(anyhow!("Max retries exceeded: {}", last_error.unwrap()))
+        Err(QueryError::RetryableError(last_error.unwrap_or_else(|| Box::new(anyhow!("Max retries exceeded").into()))))
     }
     
     async fn execute_query(
         &self,
         request: QueryRequest,
-    ) -> Result<Value, QueryError> {
+    ) -> Result<JsonValue, QueryError> {
         match request.query_type {
             QueryType::Read => self.execute_read(request).await,
             QueryType::Write => self.execute_write(request).await,
@@ -167,7 +162,7 @@ impl EventLoop {
     async fn execute_read(
         &self,
         request: QueryRequest,
-    ) -> Result<Value, QueryError> {
+    ) -> Result<JsonValue, QueryError> {
         // Execute query with timeout
         let timeout = self.config.query_timeout;
         
@@ -176,17 +171,15 @@ impl EventLoop {
                 let mut response = self.connection.query(&request.query)
                     .bind(request.params)
                     .await
-                    .map_err(|e| QueryError::ExecutionError(anyhow!(e)))?;
-                let db_value = response.take::<DbValue>(0)
-                    .map_err(|e| QueryError::ExecutionError(anyhow!(e)))?;
-                let value = serde_json::to_value(db_value)
-                    .map_err(|e| QueryError::ExecutionError(anyhow!(e)))?;
-                Ok::<Value, QueryError>(value)
+                    ?;
+                let db_value: Option<Value> = response.take(0)?;
+                let value = serde_json::to_value(db_value)?;
+                Ok::<JsonValue, QueryError>(value)
             } => {
                 result
             }
             _ = sleep(timeout) => {
-                Err(QueryError::RetryableError(anyhow!("Query timeout")))
+                Err(QueryError::Timeout)
             }
         }
     }
@@ -194,7 +187,7 @@ impl EventLoop {
     async fn execute_write(
         &self,
         request: QueryRequest,
-    ) -> Result<Value, QueryError> {
+    ) -> Result<JsonValue, QueryError> {
         // Use Query::begin() for transaction
         let tx = Query::begin();
         let tx = tx.raw(&request.query);
@@ -206,17 +199,15 @@ impl EventLoop {
             result = async {
                 let mut response = tx.execute(self.connection.as_ref())
                     .await
-                    .map_err(|e| QueryError::ExecutionError(anyhow!(e)))?;
-                let db_value = response.take::<DbValue>(0)
-                    .map_err(|e| QueryError::ExecutionError(anyhow!(e)))?;
-                let value = serde_json::to_value(db_value)
-                    .map_err(|e| QueryError::ExecutionError(anyhow!(e)))?;
-                Ok::<Value, QueryError>(value)
+                    ?;
+                let db_value: Option<Value> = response.take(0)?;
+                let value = serde_json::to_value(db_value)?;
+                Ok::<JsonValue, QueryError>(value)
             } => {
                 result
             }
             _ = sleep(timeout) => {
-                Err(QueryError::RetryableError(anyhow!("Query timeout")))
+                Err(QueryError::Timeout)
             }
         };
         
@@ -226,7 +217,7 @@ impl EventLoop {
     async fn execute_schema(
         &self,
         request: QueryRequest,
-    ) -> Result<Value, QueryError> {
+    ) -> Result<JsonValue, QueryError> {
         // Schema changes are executed atomically
         self.execute_write(request).await
     }
@@ -236,7 +227,8 @@ impl EventLoop {
 #[cfg(feature = "rt-tokio")]
 pub struct TokioExecutor {
     config: ExecutorConfig,
-    event_loops: DashMap<usize, (Sender<QueryRequest>, TaskHandle<()>)>,
+    event_loops: DashMap<usize, Sender<QueryRequest>>,
+    event_loop_handles: DashMap<usize, JoinHandle<Result<()>>>,
     pool: Pool,
     runtime: Arc<RuntimeManager>,
     metrics: Arc<RwLock<ExecutorMetrics>>,
@@ -256,19 +248,27 @@ impl BaseExecutor for TokioExecutor {
             let config = self.config.clone();
             
             // Spawn event loop
-            let handle = spawn(async move {
+            let handle = tokio::spawn(async move {
                 let event_loop = EventLoop::new(i, rx, connection, metrics, notify, config);
-                if let Err(e) = event_loop.run().await {
-                    tracing::error!("Event loop {} failed: {}", i, e);
-                }
+                event_loop.run().await
             });
             
-            self.event_loops.insert(i, (tx, handle));
+            self.event_loops.insert(i, tx);
+            self.event_loop_handles.insert(i, handle);
             
             // Update metrics
             {
                 let mut metrics = self.metrics.write().await;
                 metrics.idle_connections += 1;
+            }
+        }
+        
+        // Wait for all event loops to finish
+        for i in 0..self.config.max_connections {
+            if let Some((_, handle)) = self.event_loop_handles.remove(&i) {
+                if let Err(e) = handle.await? {
+                    tracing::error!("Event loop {} failed: {}", i, e);
+                }
             }
         }
         
@@ -280,10 +280,11 @@ impl BaseExecutor for TokioExecutor {
         self.notify_shutdown.notify_waiters();
         
         // Wait for all event loops to finish
-        for entry in self.event_loops.iter() {
-            let (_, (_, handle)) = entry.pair();
-            if let Err(e) = handle.await {
-                tracing::error!("Failed to join event loop: {}", e);
+        for i in 0..self.config.max_connections {
+            if let Some((_, handle)) = self.event_loop_handles.remove(&i) {
+                if let Err(e) = handle.await? {
+                    tracing::error!("Event loop {} failed during shutdown: {}", i, e);
+                }
             }
         }
         
@@ -301,7 +302,7 @@ impl BaseExecutor for TokioExecutor {
         self.metrics.read().await.clone()
     }
     
-    async fn execute_raw(&self, request: QueryRequest) -> Result<Value> {
+    async fn execute_raw(&self, request: QueryRequest) -> Result<JsonValue> {
         // Get next available event loop using round-robin
         let event_loop_count = self.event_loops.len();
         let event_loop_id = {
@@ -311,7 +312,7 @@ impl BaseExecutor for TokioExecutor {
         
         // Get sender for chosen event loop
         let sender = self.event_loops.get(&event_loop_id)
-            .map(|pair| pair.value().0.clone())
+            .map(|pair| pair.value().clone())
             .ok_or_else(|| anyhow!("Event loop not found"))?;
             
         // Send request to event loop
@@ -319,7 +320,7 @@ impl BaseExecutor for TokioExecutor {
             .await
             .map_err(|e| anyhow!("Failed to send request to event loop: {}", e))?;
             
-        Ok(Value::Null) // Actual response will be sent through response_tx
+        Ok(JsonValue::Null) // Actual response will be sent through response_tx
     }
 }
 
@@ -333,10 +334,229 @@ impl TokioExecutor {
         Ok(Self {
             config,
             event_loops: DashMap::new(),
+            event_loop_handles: DashMap::new(),
             pool,
             runtime,
             metrics: Arc::new(RwLock::new(ExecutorMetrics::default())),
             notify_shutdown: Arc::new(Notify::new()),
         })
+    }
+    
+    // Ensure all event loops are properly cleaned up on drop
+    fn cleanup(&self) {
+        for handle in self.event_loop_handles.iter() {
+            handle.abort();
+        }
+    }
+}
+
+#[cfg(feature = "rt-tokio")]
+impl Drop for TokioExecutor {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
+#[cfg(feature = "rt-tokio")]
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use super::*;
+    use crate::database::executor::tokio_executor::TokioExecutor;
+    use crate::database::runtime::{RuntimeConfig, RuntimeManager};
+    use crate::database::{DbConfig, QueryType};
+    use anyhow::Result;
+    use anyhow::{anyhow, bail};
+    use async_channel::bounded;
+    use deadpool_surrealdb::{Credentials, Pool, Runtime};
+    use std::time::Duration;
+    use tokio::time::timeout;
+    use crate::database::executor::{BaseExecutor, ExecutorConfig, QueryRequest};
+    use crate::database::scheduler::QueryPriority;
+
+    const TEST_TIMEOUT: Duration = Duration::from_secs(1);
+    const QUERY_TIMEOUT: Duration = Duration::from_millis(500);
+    const MAX_CONNECTIONS: u32 = 2;
+
+    struct TestExecutor {
+        executor: Arc<TokioExecutor>,
+        _pool: Pool, // Keep pool alive for test duration
+    }
+
+    impl TestExecutor {
+        async fn new() -> Result<Self> {
+            let config = ExecutorConfig {
+                max_connections: MAX_CONNECTIONS as usize,
+                connection_timeout: Duration::from_millis(100),
+                query_timeout: QUERY_TIMEOUT,
+                use_prepared_statements: false,
+            };
+
+            let db_config = DbConfig::builder()
+                .namespace("test")
+                .database("test")
+                .host("mem://")
+                .credentials(Credentials::Root {
+                    user: "root".to_string(),
+                    pass: "root".to_string(),
+                });
+
+            let pool = db_config
+                .build()
+                .map_err(|e| anyhow!(e))?
+                .create_pool(Some(Runtime::Tokio1))?;
+
+            let runtime = Arc::new(RuntimeManager::new(RuntimeConfig::default()));
+            let executor = Arc::new(TokioExecutor::new(config, pool.clone(), runtime)?);
+            executor.run().await?;
+
+            Ok(Self {
+                executor,
+                _pool: pool,
+            })
+        }
+
+        async fn cleanup(self) -> Result<()> {
+            self.executor.stop().await
+        }
+    }
+
+    async fn create_test_query(
+        query: &str,
+        query_type: QueryType,
+    ) -> (QueryRequest, async_channel::Receiver<Result<serde_json::Value>>) {
+        let (tx, rx) = bounded(1);
+        let request = QueryRequest {
+            query: query.to_string(),
+            params: vec![],
+            priority: QueryPriority::Low,
+            query_type,
+            response_tx: tx,
+        };
+        (request, rx)
+    }
+
+    #[tokio::test]
+    async fn test_basic_read_query() -> Result<()> {
+        let test = TestExecutor::new().await?;
+        let (request, rx) = create_test_query("SELECT * FROM test LIMIT 1", QueryType::Read).await;
+
+        timeout(TEST_TIMEOUT, async {
+            test.executor.execute_raw(request).await?;
+            let response = rx.recv().await?;
+            assert!(response.is_ok());
+            test.cleanup().await
+        })
+            .await?
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_queries() -> Result<()> {
+        let test = TestExecutor::new().await?;
+        let mut handles = Vec::new();
+
+        timeout(TEST_TIMEOUT, async {
+            for i in 0..5 {
+                let (request, _) = create_test_query(
+                    &format!("SELECT * FROM test WHERE id = {}", i),
+                    QueryType::Read,
+                )
+                    .await;
+
+                let exec = test.executor.clone();
+                handles.push(tokio::spawn(async move {
+                    exec.execute_raw(request).await
+                }));
+            }
+
+            for handle in handles {
+                handle.await??;
+            }
+
+            test.cleanup().await
+        })
+            .await?
+    }
+
+    #[tokio::test]
+    async fn test_query_timeout() -> Result<()> {
+        let test = TestExecutor::new().await?;
+        let (request, rx) = create_test_query("SELECT sleep(1)", QueryType::Read).await;
+
+        timeout(TEST_TIMEOUT, async {
+            test.executor.execute_raw(request).await?;
+            let response = rx.recv().await?;
+            assert!(matches!(response, Err(e) if e.to_string().contains("timeout")));
+            test.cleanup().await
+        })
+            .await?
+    }
+
+    #[tokio::test]
+    async fn test_graceful_shutdown() -> Result<()> {
+        let test = TestExecutor::new().await?;
+        let mut handles = Vec::new();
+
+        timeout(TEST_TIMEOUT, async {
+            // Start some queries
+            for i in 0..3 {
+                let (request, _) = create_test_query(
+                    &format!("SELECT sleep(0.{})", i),
+                    QueryType::Read
+                ).await;
+
+                let exec = test.executor.clone();
+                handles.push(tokio::spawn(async move {
+                    exec.execute_raw(request).await
+                }));
+            }
+
+            // Quick sleep to let queries start
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            // Initiate shutdown
+            test.cleanup().await?;
+
+            // Verify queries were handled
+            for handle in handles {
+                match handle.await {
+                    Ok(_) => (), // Completed
+                    Err(e) if e.is_cancelled() => (), // Cancelled
+                    Err(e) => bail!("Unexpected error: {}", e),
+                }
+            }
+
+            Ok(())
+        })
+            .await?
+    }
+
+    #[tokio::test]
+    async fn test_metrics_collection() -> Result<()> {
+        let test = TestExecutor::new().await?;
+
+        timeout(TEST_TIMEOUT, async {
+            let start_metrics = test.executor.metrics().await;
+
+            // Execute mix of queries
+            let queries = vec![
+                ("SELECT * FROM test", QueryType::Read),
+                ("INVALID SQL", QueryType::Read),
+                ("SELECT * FROM test WHERE id = 1", QueryType::Read),
+            ];
+
+            for (query, query_type) in queries {
+                let (request, _) = create_test_query(query, query_type).await;
+                let _ = test.executor.execute_raw(request).await;
+            }
+
+            let end_metrics = test.executor.metrics().await;
+            assert!(end_metrics.queries_executed > start_metrics.queries_executed);
+            assert!(end_metrics.queries_failed > start_metrics.queries_failed);
+            assert!(end_metrics.avg_query_time >= 0.0);
+
+            test.cleanup().await
+        })
+            .await?
     }
 }

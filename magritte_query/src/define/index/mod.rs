@@ -1,14 +1,13 @@
 //! Index definition & alternations statements.
 //!
-//! //DEFINE INDEX [ OVERWRITE | IF NOT EXISTS ] @name ON [ TABLE ] @Table [ FIELDS | COLUMNS ]
-//! @fields
-//!	[ UNIQUE
-//!        | SEARCH ANALYZER @analyzer [ BM25 [(@k1, @b)] ] [ HIGHLIGHTS ]
-//!        | MTREE DIMENSION @dimension [ TYPE @type ] [ DIST @distance ] [ CAPACITY @capacity]
-//!        | HNSW DIMENSION @dimension [ TYPE @type ] [DIST @distance] [ EFC @efc ] [ M @m ]
-//!    ]
-//!    [ COMMENT @string ]
-//!    [ CONCURRENTLY ]
+//! DEFINE INDEX [ OVERWRITE | IF NOT EXISTS ] @name ON [ TABLE ] @Table [ FIELDS | COLUMNS ] @fields
+//! [ UNIQUE
+//! | SEARCH ANALYZER @analyzer [ BM25 [(@k1, @b)] ] [ HIGHLIGHTS ]
+//! | MTREE DIMENSION @dimension [ TYPE @type ] [ DIST @distance ] [ CAPACITY @capacity]
+//! | HNSW DIMENSION @dimension [ TYPE @type ] [DIST @distance] [ EFC @efc ] [ M @m ]
+//! ]
+//! [ COMMENT @string ]
+//! [ CONCURRENTLY ]
 
 mod define;
 mod delete;
