@@ -2,6 +2,7 @@ use crate::entity::manager::EntityState;
 use crate::{HasId, TableTrait};
 use std::any::TypeId;
 use anyhow::{Result, anyhow};
+use magritte_query::database::SurrealDB;
 
 /// Raw pointer wrapper for type-erased but safe access
 pub struct TypeErasedState {
@@ -52,10 +53,10 @@ impl TypeErasedState {
     /// # Safety
     ///
     /// The caller must ensure the type is registered and compatible
-    pub unsafe fn flush_with_db(&mut self, db: crate::SurrealDB) -> Result<()> {
+    pub unsafe fn flush_with_db(&mut self, db: &SurrealDB) -> Result<()> {
         let flusher = super::registry::get_flusher_for_type(self.type_id)
             .ok_or_else(|| anyhow!("No flusher found for type"))?;
-        flusher.flush(self.ptr, db.clone())
+        flusher.flush(self.ptr, db)
     }
 }
 

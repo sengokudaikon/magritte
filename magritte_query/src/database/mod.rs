@@ -1,7 +1,7 @@
 mod executor;
 mod runtime;
 mod scheduler;
-pub use scheduler::QueryType;
+use crate::database::executor::future_executor::FutureExecutor;
 use crate::database::executor::{BaseExecutor, ExecutorConfig, ExecutorMetrics, QueryRequest};
 use crate::database::runtime::{RuntimeConfig, RuntimeManager};
 use crate::database::scheduler::QueryPriority;
@@ -9,11 +9,11 @@ use anyhow::{anyhow, Result};
 use async_channel::bounded;
 pub(crate) use deadpool_surrealdb::Config as DbConfig;
 use deadpool_surrealdb::Runtime;
+pub use scheduler::QueryType;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use crate::database::executor::future_executor::FutureExecutor;
 
 /// Main database interface that handles connection management and query execution.
 /// Users should not interact with this directly, but through Query builders.
@@ -37,17 +37,17 @@ impl SurrealDB {
             connection_timeout: Duration::from_secs(config.connect_timeout),
             query_timeout: Duration::from_secs(config.idle_timeout),
             use_prepared_statements: true,
-            max_batch_size: 100, // Default batch size
+            max_batch_size: 100,  // Default batch size
             batch_timeout_ms: 50, // Default batch timeout
         };
 
         // Create and start executor
         let executor = FutureExecutor::new(
-            executor_config, 
+            executor_config,
             pool,
             Arc::new(RuntimeManager::new(RuntimeConfig::default())),
         )?;
-        
+
         // Wrap in Arc and start
         let executor: Arc<dyn BaseExecutor> = Arc::new(executor);
         executor.run().await?;
@@ -62,7 +62,7 @@ impl SurrealDB {
         query: String,
         params: Vec<(String, Value)>,
         query_type: QueryType,
-        table_name: Option<String>
+        table_name: Option<String>,
     ) -> Result<Vec<T>>
     where
         T: DeserializeOwned + Send + 'static,
@@ -78,7 +78,7 @@ impl SurrealDB {
 
         // Execute via executor and get raw value
         let raw_value = self.executor.execute_raw(request).await?;
-        
+
         // Handle both single value and array responses
         let values = match raw_value {
             Value::Array(arr) => arr,
@@ -88,7 +88,37 @@ impl SurrealDB {
         // Deserialize each value
         values
             .into_iter()
-            .map(|v| serde_json::from_value(v).map_err(|e| anyhow!("Deserialization failed: {}", e)))
+            .map(|v| {
+                serde_json::from_value(v).map_err(|e| anyhow!("Deserialization failed: {}", e))
+            })
+            .collect()
+    }
+
+    pub async fn execute_raw<T>(&self, query: String) -> Result<Vec<T>>
+    where
+        T: DeserializeOwned + Send + 'static,
+    {
+        let request = QueryRequest {
+            query,
+            params: vec![],
+            priority: QueryPriority::Normal,
+            query_type: QueryType::Write,
+            table_name: None,
+            response_tx: bounded(1).0,
+        };
+
+        let raw_value = self.executor.execute_raw(request).await?;
+
+        // Handle both single value and array responses
+        let values = match raw_value {
+            Value::Array(arr) => arr,
+            value => vec![value],
+        };
+        values
+            .into_iter()
+            .map(|v| {
+                serde_json::from_value(v).map_err(|e| anyhow!("Deserialization failed: {}", e))
+            })
             .collect()
     }
 

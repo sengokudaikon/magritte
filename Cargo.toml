@@ -58,7 +58,7 @@ pretty_assertions = { version = "1.4.1" }
 time = { version = "0.3.36", features = ["macros"] }
 uuid = { version = "1", features = ["v4","v6"] }
 magritte_query = { path = "magritte_query", features = ["tests-cfg"] }
-
+futures-locks = "0.7.1"
 
 [[test]]
 name = "unit"

@@ -69,7 +69,7 @@ impl From<ScheduledQuery> for QueryRequest {
 
 /// Base executor trait for runtime-agnostic operations
 #[async_trait]
-pub trait BaseExecutor: Send + Sync {
+pub trait BaseExecutor: Send {
     /// Start the executor
     async fn run(&self) -> Result<()>;
     
@@ -79,7 +79,12 @@ pub trait BaseExecutor: Send + Sync {
     /// Get executor metrics
     async fn metrics(&self) -> Arc<ExecutorMetrics>;
     
-    /// Execute a raw query and return raw JSON value
+    /// Execute a raw query and return deserialized results.
+    /// The executor will:
+    /// 1. Detect query type (read/write)
+    /// 2. Choose execution strategy (parallel for reads, atomic for writes)
+    /// 3. Handle connection management
+    /// 4. Apply query prioritization
     async fn execute_raw(&self, request: QueryRequest) -> Result<Value>;
 }
 

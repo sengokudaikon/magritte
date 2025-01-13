@@ -1,26 +1,26 @@
 pub(crate) mod cache;
+pub mod macros;
 pub(crate) mod registry;
 pub(crate) mod unsafe_em;
-pub mod macros;
-pub use macros::EntityFlusherRegistration;
-pub use macros::EntityStateFlusher;
 use crate::entity::manager::cache::EntityCache;
 use crate::entity::manager::unsafe_em::TypeErasedState;
 use crate::{
-    ColumnTrait, EdgeTrait, HasColumns, HasId, HasRelations, NamedType, RecordType, RelationTrait,
+    ColumnTrait, EdgeTrait, HasColumns, HasRelations, NamedType, RecordType, RelationTrait,
     TableTrait,
 };
 use anyhow::{anyhow, Error, Result};
-use magritte_query::database::SurrealDB;
+pub use macros::EntityFlusherRegistration;
+pub use macros::EntityStateFlusher;
+use magritte_query::database::{QueryType, SurrealDB};
 use magritte_query::{HasId, Query, SurrealId};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::any::Any;
-use std::collections::HashMap;
+use std::any::{Any, TypeId};
+use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
 use std::sync::Arc;
+use futures_locks::RwLock;
 use surrealdb::Response;
-use tokio::sync::RwLock;
 use tracing::error;
 
 /// Type-safe container for entity state tracking
@@ -179,7 +179,7 @@ impl EntityManager {
         // Just select the entity:
         let mut results: Vec<T> = Query::select::<T>()
             .where_id(SurrealId::<T>::from(id))
-            .execute(self.db())
+            .execute(&self.db())
             .await
             .map_err(anyhow::Error::from)?;
         if let Some(entity) = results.pop() {
@@ -250,8 +250,19 @@ impl EntityManager {
             R::Source::table_name(),
             source_id
         );
+        
+        let query = Query::begin()
+            .raw(
+                &format!(
+                    "SELECT *, ->{}->{} AS rel_targets FROM {}:{}",
+                    def.relation_name(),
+                    R::Target::table_name(),
+                    R::Source::table_name(),
+                    source_id
+                )
+            ).commit().build();
 
-        let mut results: Vec<Value> = self.db.query(sql).await?.take(0)?;
+        let mut results: Vec<Value> = self.db.execute_raw(sql).await?;
         if results.is_empty() {
             return Err(anyhow!("No source found"));
         }
@@ -316,7 +327,7 @@ impl EntityManager {
         for state in uow.states.values_mut() {
             // Safety: We verify the type through registry before flushing
             unsafe {
-                state.flush_with_db(self.db.clone())?;
+                state.flush_with_db(&self.db)?;
             }
         }
 
@@ -331,43 +342,5 @@ impl EntityManager {
 
     pub fn cache(&self) -> Arc<EntityCache> {
         self.cache.clone()
-    }
-
-    pub async fn transaction<F, R>(&self, f: F) -> Result<R>
-    where
-        F: FnOnce(&EntityManager) -> futures::future::BoxFuture<'_, Result<R>>,
-    {
-        // Create a transaction context
-        let mut transaction = Query::begin();
-
-        match f(self).await {
-            Ok(r) => {
-                // On success, flush changes and build commit
-                self.flush().await?;
-                let res = transaction
-                    .commit()
-                    .execute(&self.db)
-                    .await
-                    .map_err(anyhow::Error::from);
-                match res {
-                    Ok(ok) => {
-                        Ok(r)
-                    }
-                    Err(e) => {
-                        error!("Transaction commit failed: {}", e);
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => {
-                // On error, build rollback
-                transaction
-                    .rollback()
-                    .execute(&self.db)
-                    .await
-                    .map_err(anyhow::Error::from)?;
-                Err(e)
-            }
-        }
     }
 }

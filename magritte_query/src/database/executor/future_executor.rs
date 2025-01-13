@@ -365,7 +365,6 @@ impl FutureExecutor {
         let transaction = if let Some(table) = &request.table_name {
             // Add a comment and the query to the transaction
             let mut stmt = Query::begin();
-            stmt = stmt.raw(&format!("-- Transaction for table {}", table));
             stmt = stmt.raw(&request.query);
             stmt.commit().build()
         } else {

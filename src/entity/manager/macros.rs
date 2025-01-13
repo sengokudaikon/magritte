@@ -3,7 +3,7 @@ use std::sync::OnceLock;
 
 pub trait EntityStateFlusher: Send + Sync {
     fn type_id(&self) -> TypeId;
-    fn flush(&self, state: *mut (), db: crate::SurrealDB) -> anyhow::Result<()>;
+    fn flush(&self, state: *mut (), db: &magritte_query::database::SurrealDB) -> anyhow::Result<()>;
 }
 
 pub struct EntityFlusherRegistration {
@@ -28,7 +28,7 @@ macro_rules! impl_entity_flush {
                     std::any::TypeId::of::<$entity>()
                 }
 
-                fn flush(&self, state_ptr: *mut (), db: $crate::SurrealDB) -> anyhow::Result<()> {
+                fn flush(&self, state_ptr: *mut (), db: &magritte_query::database::SurrealDB) -> anyhow::Result<()> {
                     // Safety: We verify the type through TypeId before casting
                     let state = unsafe { &mut *(state_ptr as *mut $crate::entity::manager::EntityState<$entity>) };
                     let rt = tokio::runtime::Handle::current();
@@ -37,7 +37,7 @@ macro_rules! impl_entity_flush {
                     for entity in state.new.drain(..) {
                         rt.block_on(
                             <$entity as $crate::entity_crud::SurrealCrud<$entity>>::insert(&entity)?
-                                .execute(db.clone())
+                                .execute(&db)
                         )?;
                     }
 
@@ -45,7 +45,7 @@ macro_rules! impl_entity_flush {
                     for entity in state.removed.drain(..) {
                         rt.block_on(
                             <$entity as $crate::entity_crud::SurrealCrud<$entity>>::delete(&entity)?
-                                .execute(db.clone())
+                                .execute(&db)
                         )?;
                     }
 
@@ -54,7 +54,7 @@ macro_rules! impl_entity_flush {
                         if let Some(entity) = state.managed.get(&id) {
                             rt.block_on(
                                 <$entity as $crate::entity_crud::SurrealCrud<$entity>>::update(entity)?
-                                    .execute(db.clone())
+                                    .execute(&db)
                             )?;
                         }
                     }
