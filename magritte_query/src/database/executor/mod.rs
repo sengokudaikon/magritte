@@ -2,6 +2,7 @@ pub(crate) mod future_executor;
 pub(crate) mod crossbeam_executor;
 pub(crate) mod coroutine_executor;
 pub(crate) mod rayon_executor;
+mod may_executor;
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;

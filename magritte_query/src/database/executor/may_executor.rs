@@ -1,213 +1,309 @@
 use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use may::coroutine;
-use may::sync::{mpsc::{channel, Receiver as MayReceiver, Sender as MaySender}, Semaphore};
+use may::coroutine::{self, scope};
+use may::sync::mpsc::{channel, Sender as MaySender};
 use serde::de::DeserializeOwned;
-use crate::rw::RwLock;
-use crate::database::executor::{Executor, ExecutorConfig, ExecutorMetrics, QueryRequest};
-use crate::database::pool::connection::{SurrealConnection, SurrealConnectionManager};
-use crate::database::runtime::{RuntimeManager, RuntimeType};
-use crate::database::scheduler::{QueryPriority, QueryType};
-use crate::query::{Query, TransactionStatement};
+use crate::database::executor::{BaseExecutor, ExecutorConfig, ExecutorMetrics, QueryRequest};
+use crate::database::runtime::RuntimeManager;
+use crate::database::QueryType;
+use crate::query::Query;
+use std::time::{Duration, Instant};
+use deadpool_surrealdb::Pool;
+use thiserror::Error;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use async_channel;
+
+const MAX_RETRIES: u32 = 3;
+const RETRY_DELAY_MS: u64 = 100;
+const MAX_CONCURRENT: usize = 32;
+
+#[derive(Error, Debug)]
+pub enum QueryError {
+    #[error("Query execution failed: {0}")]
+    ExecutionError(String),
+    #[error("Query timed out")]
+    Timeout,
+    #[error("Connection error: {0}")]
+    ConnectionError(String),
+}
+
+#[derive(Default)]
+struct Metrics {
+    active_connections: AtomicUsize,
+    idle_connections: AtomicUsize,
+    queries_executed: AtomicUsize,
+    queries_failed: AtomicUsize,
+    total_query_time: AtomicUsize,
+}
 
 pub struct MayExecutor {
     config: ExecutorConfig,
-    manager: SurrealConnectionManager,
-    metrics: Arc<RwLock<ExecutorMetrics>>,
+    pool: Pool,
     runtime: Arc<RuntimeManager>,
-    shutdown_tx: MaySender<()>,
-    shutdown_rx: MayReceiver<()>,
+    metrics: Arc<Metrics>,
+    running: Arc<AtomicBool>,
+    request_tx: MaySender<QueryRequest>,
+    active_tasks: Arc<AtomicUsize>,
 }
 
 impl MayExecutor {
-    pub fn new(config: ExecutorConfig, manager: SurrealConnectionManager, runtime: Arc<RuntimeManager>) -> Result<Self> {
-        if runtime.may_config().is_none() {
-            return Err(anyhow!("May runtime not initialized"));
-        }
+    pub fn new(config: ExecutorConfig, pool: Pool, runtime: Arc<RuntimeManager>) -> Result<Self> {
+        let (request_tx, request_rx) = channel();
         
-        let (shutdown_tx, shutdown_rx) = channel();
-        Ok(Self {
-            config: config.clone(),
-            manager,
-            metrics: Arc::new(RwLock::new(ExecutorMetrics::default())),
+        let executor = Self {
+            config,
+            pool,
             runtime,
-            shutdown_tx,
-            shutdown_rx,
-        })
-    }
-    
-    async fn execute_transaction<T>(&self, queries: Vec<String>) -> Result<Vec<T>>
-    where
-        T: DeserializeOwned + Send + 'static,
-    {
-        // Get connection from pool
-        let conn = self.manager.get_conn().await?;
-        
-        // Update metrics
-        {
-            let mut metrics = self.metrics.write();
-            metrics.active_connections += 1;
-        }
-        
-        // Build transaction
-        let mut tx = Query::begin();
-        for query in queries {
-            tx = tx.raw(&query);
-        }
-        tx = tx.commit();
-        
-        let sql = tx.build();
-        
-        // Execute transaction with timeout using channels
-        let start = std::time::Instant::now();
-        let result = {
-            let (tx, rx) = channel();
-            let query_future = conn.query(&sql);
-            
-            // Use scope to ensure coroutines are cleaned up
-            coroutine::scope(|scope| {
-                // Spawn timeout coroutine
-                let timeout = self.config.query_timeout;
-                scope.spawn(move || {
-                    coroutine::sleep(timeout);
-                    let _ = tx.send(Err(anyhow!("Transaction timeout")));
-                    coroutine::yield_now();
+            metrics: Arc::new(Metrics::default()),
+            running: Arc::new(AtomicBool::new(false)),
+            request_tx,
+            active_tasks: Arc::new(AtomicUsize::new(0)),
+        };
+
+        // Start the event loop coroutine
+        let executor_clone = executor.clone();
+        unsafe {
+            coroutine::spawn(move || {
+                scope(|scope| {
+                    scope.spawn(async move || {
+                        if let Err(e) = executor_clone.run_event_loop(request_rx).await {
+                            tracing::error!("Event loop error: {}", e);
+                        }
+                    });
                 });
-                
-                // Spawn query execution coroutine
-                scope.spawn(move || {
-                    match query_future.await {
-                        Ok(result) => {
-                            let _ = tx.send(Ok(result));
-                        }
-                        Err(e) => {
-                            let _ = tx.send(Err(anyhow!(e)));
-                        }
+            });
+        }
+
+        Ok(executor)
+    }
+
+    async fn run_event_loop(&self, request_rx: may::sync::mpsc::Receiver<QueryRequest>) -> Result<()> {
+        self.running.store(true, Ordering::SeqCst);
+
+        while self.running.load(Ordering::SeqCst) {
+            if self.active_tasks.load(Ordering::SeqCst) >= MAX_CONCURRENT {
+                coroutine::sleep(Duration::from_millis(10));
+                continue;
+            }
+
+            match request_rx.try_recv() {
+                Ok(request) => {
+                    self.active_tasks.fetch_add(1, Ordering::SeqCst);
+                    let executor = self.clone();
+                    let start_time = Instant::now();
+
+                    unsafe {
+                        scope(|scope| {
+                            scope.spawn(async move || {
+                                let result = match request.query_type {
+                                    QueryType::Read => {
+                                        executor.execute_read_query(&request).await
+                                    }
+                                    QueryType::Write => {
+                                        executor.execute_write_query(&request).await
+                                    }
+                                    QueryType::Schema => {
+                                        executor.execute_schema_query(&request).await
+                                    }
+                                };
+
+                                executor.handle_query_result(result, start_time, &request).await;
+                                executor.active_tasks.fetch_sub(1, Ordering::SeqCst);
+                            });
+                        });
                     }
-                    coroutine::yield_now();
+                }
+                Err(_) => {
+                    coroutine::sleep(Duration::from_millis(10));
+                }
+            }
+        }
+
+        // Wait for active tasks to complete
+        let mut prev_active_tasks = self.active_tasks.load(Ordering::SeqCst);
+        while self.active_tasks.load(Ordering::SeqCst) > 0 {
+            coroutine::sleep(Duration::from_millis(10));
+            let current_tasks = self.active_tasks.load(Ordering::SeqCst);
+            if current_tasks == prev_active_tasks {
+                tracing::warn!("Waiting for {} active tasks to complete", current_tasks);
+            }
+            prev_active_tasks = current_tasks;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_query_result(
+        &self,
+        result: Result<serde_json::Value, QueryError>,
+        start_time: Instant,
+        request: &QueryRequest,
+    ) {
+        let elapsed = start_time.elapsed();
+
+        match result {
+            Ok(value) => {
+                self.metrics.queries_executed.fetch_add(1, Ordering::Relaxed);
+                let elapsed_micros = elapsed.as_micros() as usize;
+                self.metrics.total_query_time.fetch_add(elapsed_micros, Ordering::Relaxed);
+
+                if let Err(e) = request.response_tx.send(Ok(value)).await {
+                    tracing::error!("Failed to send query result: {}", e);
+                }
+            }
+            Err(e) => {
+                self.metrics.queries_failed.fetch_add(1, Ordering::Relaxed);
+                let error = anyhow!("Query failed: {}", e);
+                if let Err(send_err) = request.response_tx.send(Err(error)).await {
+                    tracing::error!("Failed to send query error: {}", send_err);
+                }
+            }
+        }
+    }
+
+    async fn execute_read_query(&self, request: &QueryRequest) -> Result<serde_json::Value, QueryError> {
+        self.metrics.active_connections.fetch_add(1, Ordering::Relaxed);
+        
+        let conn = self.pool.get().await
+            .map_err(|e| QueryError::ConnectionError(e.to_string()))?;
+
+        let mut response = conn.query(request.query.as_str())
+            .bind(request.params.clone())
+            .await
+            .map_err(|e| QueryError::ExecutionError(e.to_string()))?;
+
+        self.metrics.active_connections.fetch_sub(1, Ordering::Relaxed);
+
+        let value = response.take::<Option<surrealdb::Value>>(0)
+            .map_err(|e| QueryError::ExecutionError(e.to_string()))?
+            .ok_or_else(|| QueryError::ExecutionError("No value returned".to_string()))?;
+
+        serde_json::to_value(value).map_err(|e| QueryError::ExecutionError(e.to_string()))
+    }
+
+    async fn execute_write_query(&self, request: &QueryRequest) -> Result<serde_json::Value, QueryError> {
+        self.metrics.active_connections.fetch_add(1, Ordering::Relaxed);
+
+        let conn = self.pool.get().await
+            .map_err(|e| QueryError::ConnectionError(e.to_string()))?;
+
+        let transaction = if let Some(table) = &request.table_name {
+            let mut stmt = Query::begin();
+            stmt = stmt.raw(&request.query);
+            stmt.commit().build()
+        } else {
+            request.query.clone()
+        };
+
+        let mut response = conn.query(transaction)
+            .bind(request.params.clone())
+            .await
+            .map_err(|e| QueryError::ExecutionError(e.to_string()))?;
+
+        self.metrics.active_connections.fetch_sub(1, Ordering::Relaxed);
+
+        let value = response.take::<Option<surrealdb::sql::Value>>(0)
+            .map_err(|e| QueryError::ExecutionError(e.to_string()))?
+            .ok_or_else(|| QueryError::ExecutionError("No value returned".to_string()))?;
+
+        serde_json::to_value(value).map_err(|e| QueryError::ExecutionError(e.to_string()))
+    }
+
+    async fn execute_schema_query(&self, request: &QueryRequest) -> Result<serde_json::Value, QueryError> {
+        // Wait for all active operations to complete
+        while self.metrics.active_connections.load(Ordering::Relaxed) > 0 {
+            coroutine::sleep(Duration::from_millis(50));
+        }
+
+        self.execute_write_query(request).await
+    }
+
+    async fn execute_raw(&self, request: QueryRequest) -> Result<serde_json::Value> {
+        let (response_tx, response_rx) = async_channel::bounded(1);
+        let request = QueryRequest {
+            response_tx,
+            ..request
+        };
+
+        self.request_tx.send(request)?;
+
+        // Wait for response using may's coroutine
+        unsafe {
+            let (tx, rx) = may::sync::mpsc::channel();
+            
+            scope(|scope| {
+                let tx = tx.clone();
+                scope.spawn(async move || {
+                    if let Ok(response) = response_rx.recv().await {
+                        let _ = tx.send(response);
+                    }
                 });
             });
             
-            // Wait for either query completion or timeout
-            rx.recv()?
-        }?;
-        
-        // Process all results from transaction
-        let mut results = Vec::new();
-        for i in 0..queries.len() {
-            if let Ok(res) = result.take(i) {
-                results.extend(res);
+            match rx.recv() {
+                Ok(Ok(value)) => Ok(value),
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err(anyhow!("No response received")),
             }
         }
-        
-        // Update metrics
-        {
-            let mut metrics = self.metrics.write();
-            metrics.active_connections -= 1;
-            metrics.queries_executed += queries.len();
-            metrics.avg_query_time = (metrics.avg_query_time * (metrics.queries_executed - queries.len()) as f64
-                + start.elapsed().as_secs_f64())
-                / metrics.queries_executed as f64;
-        }
-        
-        Ok(results)
-    }
-    
-    /// Batch multiple queries into a single transaction
-    async fn batch_execute<T>(&self, requests: Vec<QueryRequest>) -> Result<Vec<T>>
-    where
-        T: DeserializeOwned + Send + 'static,
-    {
-        let queries: Vec<String> = requests.into_iter()
-            .map(|r| r.query)
-            .collect();
-            
-        self.execute_transaction(queries).await
     }
 }
 
 #[async_trait]
-impl Executor for MayExecutor {
-    async fn execute<T>(&self, request: QueryRequest) -> Result<Vec<T>>
-    where
-        T: DeserializeOwned + Send + 'static,
-    {
-        // Always wrap single queries in transactions too
-        self.execute_transaction(vec![request.query]).await
-    }
-    
-    async fn execute_parallel<T>(&self, requests: Vec<QueryRequest>) -> Result<Vec<Result<Vec<T>>>>
-    where
-        T: DeserializeOwned + Send + 'static,
-    {
-        // Group requests by priority
-        use std::collections::HashMap;
-        let mut priority_groups: HashMap<QueryPriority, Vec<QueryRequest>> = HashMap::new();
-        
-        for request in requests {
-            priority_groups.entry(request.priority)
-                .or_insert_with(Vec::new)
-                .push(request);
-        }
-        
-        let mut results = Vec::new();
-        
-        // Execute critical queries immediately in current coroutine
-        if let Some(critical) = priority_groups.remove(&QueryPriority::Critical) {
-            results.push(self.batch_execute(critical).await.map(|r| r));
-        }
-        
-        // Execute other priority groups in parallel
-        let (tx, rx) = channel();
-        let executor = self.clone();
-        
-        coroutine::scope(|scope| {
-            for (_, group) in priority_groups {
-                let tx = tx.clone();
-                let executor = executor.clone();
-                
-                scope.spawn(move || {
-                    let result = executor.batch_execute(group);
-                    let _ = tx.send(result);
-                    coroutine::yield_now();
-                });
-            }
-        });
-        
-        // Collect results
-        while let Ok(result) = rx.recv() {
-            results.push(result);
-        }
-        
-        Ok(results)
-    }
-    
+impl BaseExecutor for MayExecutor {
     async fn run(&self) -> Result<()> {
-        // Create coroutine guard
-        let _guard = self.runtime.create_guard()
-            .ok_or_else(|| anyhow!("Failed to create coroutine guard"))?;
-            
-        // Main event loop
-        loop {
-            if self.shutdown_rx.try_recv().is_ok() {
-                break;
-            }
-            
-            // Yield to allow other coroutines to run
-            coroutine::yield_now();
+        Ok(())
+    }
+
+    async fn stop(&self) -> Result<()> {
+        self.running.store(false, Ordering::SeqCst);
+        
+        while self.metrics.active_connections.load(Ordering::Relaxed) > 0 {
+            coroutine::sleep(Duration::from_millis(100));
         }
         
         Ok(())
     }
-    
-    async fn stop(&self) -> Result<()> {
-        self.shutdown_tx.send(())?;
-        Ok(())
+
+    async fn metrics(&self) -> Arc<ExecutorMetrics> {
+        Arc::new(ExecutorMetrics {
+            active_connections: AtomicUsize::new(self.metrics.active_connections.load(Ordering::Relaxed)),
+            idle_connections: AtomicUsize::new(self.metrics.idle_connections.load(Ordering::Relaxed)),
+            queries_executed: AtomicUsize::new(self.metrics.queries_executed.load(Ordering::Relaxed)),
+            queries_failed: AtomicUsize::new(self.metrics.queries_failed.load(Ordering::Relaxed)),
+            total_query_time: AtomicUsize::new(self.metrics.total_query_time.load(Ordering::Relaxed)),
+        })
     }
-    
-    async fn metrics(&self) -> ExecutorMetrics {
-        self.metrics.read().clone()
+
+    async fn execute_raw(&self, request: QueryRequest) -> Result<serde_json::Value> {
+        let (response_tx, response_rx) = async_channel::bounded(1);
+        let request = QueryRequest {
+            response_tx,
+            ..request
+        };
+
+        self.request_tx.send(request)?;
+
+        // Wait for response using may's coroutine
+        unsafe {
+            let (tx, rx) = may::sync::mpsc::channel();
+            
+            scope(|scope| {
+                let tx = tx.clone();
+                scope.spawn(async move || {
+                    if let Ok(response) = response_rx.recv().await {
+                        let _ = tx.send(response);
+                    }
+                });
+            });
+            
+            match rx.recv() {
+                Ok(Ok(value)) => Ok(value),
+                Ok(Err(e)) => Err(e),
+                Err(_) => Err(anyhow!("No response received")),
+            }
+        }
     }
 }
 
@@ -215,11 +311,12 @@ impl Clone for MayExecutor {
     fn clone(&self) -> Self {
         Self {
             config: self.config.clone(),
-            manager: self.manager.clone(),
-            metrics: self.metrics.clone(),
+            pool: self.pool.clone(),
             runtime: self.runtime.clone(),
-            shutdown_tx: self.shutdown_tx.clone(),
-            shutdown_rx: self.shutdown_rx.clone(),
+            metrics: self.metrics.clone(),
+            running: self.running.clone(),
+            request_tx: self.request_tx.clone(),
+            active_tasks: self.active_tasks.clone(),
         }
     }
 }

@@ -39,11 +39,7 @@ futures = "0.3.31"
 async-channel = "2.3.1"
 deadpool-surrealdb = { git = "https://github.com/sengokudaikon/deadpool",features = ["rt_tokio_1", "serde"] }
 log = { version = "0.4", default-features = false }
-tokio = { version = "1.41.1", features = ["full"], optional = true}
-tokio-util ={ version = "0.7.13", features = ["full"], optional = true}
-structured-spawn = { version = "1.0.1" ,optional = true}
 may = "0.3.48"
-async-std = { version = "1.13.0",features = ["default", "attributes"],optional = true }
 dashmap = "6.1.0"
 num_cpus = "1.16.0"
 thiserror = "2.0.11"
@@ -61,7 +57,7 @@ debug = true
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
 flamegraph = "0.6.7"
-
+tokio = { version = "1.43.0",features = ["default", "test-util", "macros"] }
 [features]
 thread-safe = []
 tests-cfg = []

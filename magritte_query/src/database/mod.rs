@@ -127,3 +127,11 @@ impl SurrealDB {
         Ok(self.executor.metrics().await)
     }
 }
+
+unsafe impl Send for SurrealDB {
+    
+}
+
+unsafe impl Sync for SurrealDB {
+    
+}

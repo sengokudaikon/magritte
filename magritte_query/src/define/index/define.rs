@@ -110,17 +110,17 @@ impl DefineIndexStatement {
 
         if let Some(fields) = &self.fields {
             stmt.push_str(" FIELDS ");
-            if fields.len() == 1 {
-                stmt.push_str(fields.first().unwrap().as_str());
-            } else if fields.len() > 1 {
-                stmt.push_str(fields.join(", ").as_str());
+            match fields.len() {
+                1 => stmt.push_str(fields.first().unwrap().as_str()),
+                n if n > 1 => stmt.push_str(fields.join(", ").as_str()),
+                _ => {}
             }
         } else if let Some(columns) = &self.columns {
             stmt.push_str(" COLUMNS ");
-            if columns.len() == 1 {
-                stmt.push_str(columns.first().unwrap().as_str());
-            } else if columns.len() > 1 {
-                stmt.push_str(columns.join(", ").as_str());
+            match columns.len() {
+                1 => stmt.push_str(columns.first().unwrap().as_str()),
+                n if n > 1 => stmt.push_str(columns.join(", ").as_str()),
+                _ => {}
             }
         }
 
