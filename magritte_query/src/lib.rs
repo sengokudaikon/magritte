@@ -1,3 +1,4 @@
+#![feature(async_closure)]
 #![allow(clippy::wrong_self_convention)]
 #![allow(unused)]
 #![allow(ambiguous_glob_reexports)]

@@ -4,8 +4,10 @@ use anyhow::Result;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeType {
     /// Use Tokio with async/await
-    Tokio,
-    AsyncStd,
+    Future,
+    Crossbeam,
+    Coroutine,
+    Rayon
 }
 
 /// Runtime configuration for query execution
@@ -24,7 +26,7 @@ pub struct RuntimeConfig {
 impl Default for RuntimeConfig {
     fn default() -> Self {
         Self {
-            runtime_type: RuntimeType::Tokio,
+            runtime_type: RuntimeType::Future,
             dedicated_threads: num_cpus::get() / 4, // Use 1/4 of available cores
             coroutine_stack_size: 0x1000,           // 4KB stack size
             max_coroutines_per_thread: 1000,        // Maximum coroutines per thread
@@ -45,8 +47,10 @@ impl RuntimeManager {
     /// Initialize the runtime with dedicated threads
     pub fn initialize(&self) -> Result<()> {
         match self.config.runtime_type {
-            RuntimeType::Tokio => Ok(()),
-            RuntimeType::AsyncStd => Ok(()),
+            RuntimeType::Future => Ok(()),
+            RuntimeType::Crossbeam => Ok(()),
+            RuntimeType::Coroutine => Ok(()),
+            RuntimeType::Rayon => Ok(())
         }
     }
 

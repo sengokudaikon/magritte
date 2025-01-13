@@ -21,6 +21,7 @@ magritte_query = { version = "0", path = "magritte_query", default-features = fa
 surrealdb = { version = "^2.1.4", features = ["default","scripting",] }
 futures = { version = "0.3", default-features = false, features = ["std", "thread-pool"] }
 futures-util = { version = "0.3.31",features = ["std"] }
+futures-channel = { version = "0.3", default-features = false, features = ["std"] }
 log = { version = "0.4", default-features = false }
 async-std = { version = "1.13.0",features = ["default", "attributes"],optional = true }
 moka = { version = "0.12.8",features = ["default","future"] }
@@ -59,7 +60,6 @@ required-features = ["tests-cfg"]
 default = [
     "with-json",
     "with-uuid",
-    "rt-tokio",
 ]
 mock = ["surrealdb/arbitrary"]
 proxy = ["serde_json", "serde/derive"]
@@ -72,7 +72,5 @@ with-time = ["time", "magritte_query/with-time", "magritte_macros/with-time"]
 with-geo = ["geo", "magritte_macros/with-geo", "magritte_query/with-geo"]
 with-native-tls = ["surrealdb/native-tls"]
 with-rustls = ["surrealdb/rustls",]
-rt-tokio = ["tokio", "magritte_query/rt-tokio"]
-rt-async-std = ["async-std", "magritte_query/rt-async-std"]
 tests-cfg = ["serde/derive",]
 full = ["default", "with-rustls"]

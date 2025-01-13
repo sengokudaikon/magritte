@@ -1,6 +1,9 @@
-pub(crate) mod tokio_executor;
-pub(crate) mod async_std_executor;
+pub(crate) mod future_executor;
+pub(crate) mod crossbeam_executor;
+pub(crate) mod coroutine_executor;
+pub(crate) mod rayon_executor;
 
+use std::sync::Arc;
 use anyhow::Result;
 use async_channel::Sender;
 use async_trait::async_trait;
@@ -57,7 +60,7 @@ impl From<ScheduledQuery> for QueryRequest {
 
 /// Base executor trait for runtime-agnostic operations
 #[async_trait]
-pub trait BaseExecutor: Send + Sync {
+pub trait BaseExecutor: Send {
     /// Start the executor
     async fn run(&self) -> Result<()>;
     
@@ -65,7 +68,7 @@ pub trait BaseExecutor: Send + Sync {
     async fn stop(&self) -> Result<()>;
     
     /// Get executor metrics
-    async fn metrics(&self) -> ExecutorMetrics;
+    async fn metrics(&self) -> Arc<ExecutorMetrics>;
     
     /// Execute a raw query and return JSON value.
     /// The executor will:

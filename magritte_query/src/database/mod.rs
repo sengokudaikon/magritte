@@ -1,6 +1,5 @@
 mod executor;
 mod runtime;
-mod rw;
 mod scheduler;
 pub use scheduler::QueryType;
 use crate::database::executor::{BaseExecutor, ExecutorConfig, ExecutorMetrics, QueryRequest};
@@ -18,7 +17,7 @@ use std::time::Duration;
 /// Main database interface that handles connection management and query execution.
 /// Users should not interact with this directly, but through Query builders.
 pub struct SurrealDB {
-    executor: Arc<dyn BaseExecutor + Send + Sync>,
+    executor: Arc<dyn BaseExecutor>,
     config: DbConfig,
 }
 
@@ -42,24 +41,9 @@ impl SurrealDB {
         };
 
         // Create and start executor
-        let executor_factory = || -> Result<Arc<dyn BaseExecutor + Send + Sync>>{
-            #[cfg(feature = "rt-tokio")]
-            {
-                return Ok(Arc::new(
-                    executor::tokio_executor::TokioExecutor::new(executor_config, pool, runtime)?,
-                ));
-            }
-
-            #[cfg(feature = "rt-async-std")]
-            {
-                return Ok(Arc::new(
-                    executor::async_std_executor::AsyncStdExecutor::new(executor_config, pool, runtime)?,
-                ));
-            }
-
-            unreachable!("No runtime was selected")
-        };
-        let executor = executor_factory()?;
+        let executor = Arc::new(
+            executor::future_executor::FutureExecutor::new(executor_config, pool, runtime)?,
+        );
         // Start executor
         executor.run().await?;
 
@@ -95,7 +79,7 @@ impl SurrealDB {
     }
 
     /// Get current executor metrics (internal use)
-    pub(crate) async fn metrics(&self) -> Result<ExecutorMetrics> {
+    pub(crate) async fn metrics(&self) -> Result<Arc<ExecutorMetrics>> {
         Ok(self.executor.metrics().await)
     }
 }
