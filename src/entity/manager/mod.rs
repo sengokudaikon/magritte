@@ -11,11 +11,12 @@ use crate::{
     TableTrait,
 };
 use anyhow::{anyhow, Error, Result};
-use magritte_query::{HasId as _, Query, SurrealDB, SurrealId};
+use magritte_query::database::SurrealDB;
+use magritte_query::{HasId, Query, SurrealId};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::any::TypeId;
-use std::collections::{HashMap, HashSet};
+use std::any::Any;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use surrealdb::Response;

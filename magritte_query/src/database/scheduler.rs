@@ -26,6 +26,7 @@ pub struct ScheduledQuery {
     pub params: Vec<(String, Value)>,
     pub priority: QueryPriority,
     pub query_type: QueryType,
+    pub table_name: Option<String>,
     pub response_tx: Sender<Result<Value>>,
 }
 
@@ -35,6 +36,7 @@ impl ScheduledQuery {
         params: Vec<(String, Value)>,
         priority: QueryPriority,
         query_type: QueryType,
+        table_name: Option<String>,
         response_tx: Sender<Result<Value>>,
     ) -> Self {
         Self {
@@ -42,6 +44,7 @@ impl ScheduledQuery {
             params,
             priority,
             query_type,
+            table_name,
             response_tx,
         }
     }

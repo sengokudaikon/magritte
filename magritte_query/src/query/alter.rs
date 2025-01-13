@@ -140,7 +140,7 @@ impl AlterStatement {
     /// Execute the ALTER query
     #[instrument(skip_all)]
     async fn execute<T: Send + DeserializeOwned + 'static>(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, vec![], QueryType::Write).await
+        conn.execute(self.build()?, vec![], QueryType::Write, self.table).await
     }
 }
 impl Transactional for AlterStatement {

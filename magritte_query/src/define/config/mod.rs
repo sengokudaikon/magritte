@@ -150,7 +150,7 @@ impl DefineConfigStatement {
 
     /// Executes the GraphQL configuration statement on the database
     pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema).await
+        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
     }
 }
 

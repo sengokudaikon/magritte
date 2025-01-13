@@ -601,7 +601,7 @@ where
 
     #[instrument(skip_all)]
     pub async fn execute(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Read).await
+        conn.execute(self.build()?, self.parameters, QueryType::Read, None).await
     }
 }
 impl<T> HasVectorConditions for SelectStatement<T>

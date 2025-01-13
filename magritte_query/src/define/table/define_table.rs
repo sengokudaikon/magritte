@@ -238,7 +238,7 @@ where
     }
 
     pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema).await
+        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
     }
 }
 

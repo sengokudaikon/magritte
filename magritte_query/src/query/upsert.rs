@@ -205,7 +205,7 @@ where
     }
 
     async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Write).await
+        conn.execute(self.build()?, self.parameters, QueryType::Write, Some(T::table_name().to_string())).await
     }
 }
 impl<T> Returns for UpsertStatement<T>

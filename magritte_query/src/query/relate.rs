@@ -133,7 +133,7 @@ impl RelateStatement {
     }
 
     pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Write).await
+        conn.execute(self.build()?, vec![], QueryType::Write, Some(self.from_record)).await
     }
 }
 

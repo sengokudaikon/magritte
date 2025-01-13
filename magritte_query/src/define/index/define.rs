@@ -143,7 +143,7 @@ impl DefineIndexStatement {
     }
 
     pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema).await
+        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
     }
 }
 
