@@ -36,28 +36,26 @@ chrono = { version = "0.4", features = ["serde"], optional = true }
 time = { version = "0.3.36", optional = true }
 rand = { version = "0.8.5",features = ["default", "serde1"] }
 futures = "0.3.31"
-async-channel = "2.3.1"
 deadpool-surrealdb = { git = "https://github.com/sengokudaikon/deadpool",features = ["rt_tokio_1", "serde"] }
 log = { version = "0.4", default-features = false }
-may = "0.3.48"
 dashmap = "6.1.0"
 num_cpus = "1.16.0"
 thiserror = "2.0.11"
-futures-channel = "0.3.31"
 futures-util = { version = "0.3.31",features = ["std"] }
-futures-executor = { version = "0.3.31"}
-futures-timer = { version = "3.0.3"}
 futures-concurrency = { version = "7.6.2"  }
-futures-macro = { version = "0.3.31"}
-futures-locks = { version = "0.7.1"}
-
+tokio = "1.41.1"
+tracing-subscriber = "0.3.19"
+crossbeam-channel = "0.5.13"
+crossbeam-utils = "0.8.19"
+structured-spawn = "1.0.1"
 [profile.bench]
 debug = true
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["async_tokio"] }
 flamegraph = "0.6.7"
-tokio = { version = "1.43.0",features = ["default", "test-util", "macros"] }
+tokio = { version = "1.43.0",features = ["full"] }
+
 [features]
 thread-safe = []
 tests-cfg = []

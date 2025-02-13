@@ -126,12 +126,11 @@ impl DefineFunctionStatement {
     /// Sets the function name (must be prefixed with "fn::")
     pub fn name(mut self, name: impl Into<String>) -> Self {
         let name = name.into();
-        let name = if !name.starts_with("fn::") {
+        self.name = Some(if !name.starts_with("fn::") {
             format!("fn::{}", name)
         } else {
             name
-        };
-        self.name = Some(name);
+        });
         self
     }
 
@@ -181,15 +180,18 @@ impl DefineFunctionStatement {
     pub fn build(&self) -> anyhow::Result<String> {
         let name = self.name.as_ref().ok_or_else(|| anyhow!("Function name is required"))?;
         if name.is_empty() {
-            bail!("Function name is required");
+            bail!("Function name cannot be empty");
         }
         if !name.starts_with("fn::") {
             bail!("Function name must start with 'fn::'");
         }
+        if name.len() <= 4 {  // "fn::" is 4 chars
+            bail!("Function name must not be empty after 'fn::'");
+        }
 
         let query = self.query.as_ref().ok_or_else(|| anyhow!("Function query/body is required"))?;
         if query.is_empty() {
-            bail!("Function query/body is required");
+            bail!("Function query/body cannot be empty");
         }
 
         let mut stmt = String::new();
@@ -401,15 +403,5 @@ mod tests {
             .query("")
             .build();
         assert!(stmt.is_err());
-    }
-
-    #[test]
-    fn test_invalid_function_name() {
-        let stmt = DefineFunctionStatement::new()
-            .name("invalid_name")
-            .query("RETURN true;")
-            .build();
-        assert!(stmt.is_err());
-        assert!(stmt.unwrap_err().to_string().contains("must start with 'fn::'"));
     }
 }
