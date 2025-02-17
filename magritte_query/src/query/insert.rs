@@ -6,9 +6,10 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use crate::transaction::Transactional;
-use crate::{FromTarget, RecordType, ReturnType, SurrealId};
+use crate::{FromTarget, HasParams, RecordType, ReturnType, SelectStatement, SurrealId};
 use anyhow::{anyhow, Result};
 use serde::Serialize;
+use serde_json::Value;
 use tracing::{error, info, instrument};
 use crate::database::{QueryType, SurrealDB};
 
@@ -269,6 +270,19 @@ where
         conn.execute(self.build()?, self.parameters, QueryType::Write, Some(T::table_name().to_string())).await
     }
 }
+impl<T> HasParams for InsertStatement<T>
+where
+    T: RecordType,
+{
+    fn params(&self) -> &Vec<(String, Value)> {
+        &self.parameters
+    }
+
+    fn params_mut(&mut self) -> &mut Vec<(String, Value)> {
+        &mut self.parameters
+    }
+}
+
 fn unquote_keys(value: &serde_json::Value) -> Result<String> {
     match value {
         serde_json::Value::Object(map) => {

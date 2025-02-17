@@ -9,3 +9,4 @@ Cargo.lock
 .DS_Store
 /sea-orm-master
 /sea-query-master
+.aider*
