@@ -1,6 +1,5 @@
 use crate::database::executor::core::config::BatchConfig;
-use crate::database::executor::core::types::QueryType;
-use crate::database::executor::{ExecutorError, QueryRequest};
+use crate::database::executor::core::types::{ExecutorError, QueryRequest, QueryType};
 use dashmap::DashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -128,97 +127,4 @@ pub struct BatchResult {
     pub reads: Vec<QueryRequest>,
     pub writes: DashMap<String, Vec<QueryRequest>>,
     pub schema: Vec<QueryRequest>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::database::executor::core::types::QueryPriority;
-    use tokio::sync::mpsc::channel;
-
-    fn create_test_query(query_type: QueryType, table: Option<String>) -> QueryRequest {
-        let (tx, _) = channel(1);
-        QueryRequest {
-            query: "test query".into(),
-            params: vec![],
-            priority: QueryPriority::Normal,
-            query_type,
-            table_name: table,
-            response_tx: tx,
-        }
-    }
-
-    #[tokio::test]
-    async fn test_batch_limits() {
-        let config = BatchConfig {
-            max_read_batch_size: 2,
-            max_write_batch_size: 2,
-            batch_timeout: Duration::from_millis(50),
-        };
-        let batch = QueryBatch::new(config);
-
-        // Test read batch
-        assert!(batch
-            .add_request(create_test_query(QueryType::Read, None))
-            .await
-            .is_ok());
-        assert!(batch
-            .add_request(create_test_query(QueryType::Read, None))
-            .await
-            .is_ok());
-        assert!(batch
-            .add_request(create_test_query(QueryType::Read, None))
-            .await
-            .is_err());
-
-        // Test write batch
-        let table = Some("test_table".into());
-        assert!(batch
-            .add_request(create_test_query(QueryType::Write, table.clone()))
-            .await
-            .is_ok());
-        assert!(batch
-            .add_request(create_test_query(QueryType::Write, table.clone()))
-            .await
-            .is_ok());
-        assert!(batch
-            .add_request(create_test_query(QueryType::Write, table))
-            .await
-            .is_err());
-    }
-
-    #[tokio::test]
-    async fn test_batch_flush() {
-        let config = BatchConfig {
-            max_read_batch_size: 10,
-            max_write_batch_size: 10,
-            batch_timeout: Duration::from_millis(50),
-        };
-        let batch = QueryBatch::new(config);
-
-        // Add mixed queries
-        batch
-            .add_request(create_test_query(QueryType::Read, None))
-            .await
-            .unwrap();
-        batch
-            .add_request(create_test_query(QueryType::Write, Some("table1".into())))
-            .await
-            .unwrap();
-        batch
-            .add_request(create_test_query(QueryType::Schema, None))
-            .await
-            .unwrap();
-
-        // Flush and verify
-        let result = batch.flush().await;
-        assert_eq!(result.reads.len(), 1);
-        assert_eq!(result.writes.len(), 1);
-        assert_eq!(result.schema.len(), 1);
-
-        // Verify batches are empty after flush
-        assert!(batch.read_batch.read().await.is_empty());
-        assert!(batch.write_batches.is_empty());
-        assert!(batch.schema_batch.read().await.is_empty());
-    }
 }

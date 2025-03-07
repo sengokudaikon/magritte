@@ -2,11 +2,10 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
 use crate::database::executor::{
-    ExecutorError,
-    QueryRequest,
     utils::metrics::ExecutorMetrics,
 };
 use serde_json::Value;
+use crate::database::executor::core::types::{ExecutorError, QueryRequest};
 
 pub mod config;
 pub mod types;

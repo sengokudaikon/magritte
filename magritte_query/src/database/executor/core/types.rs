@@ -11,7 +11,6 @@ pub struct QueryRequest {
     pub priority: QueryPriority,
     pub query_type: QueryType,
     pub table_name: Option<String>,
-    pub response_tx: Sender<Result<Value>>,
 }
 
 #[derive(Error, Debug, Clone)]

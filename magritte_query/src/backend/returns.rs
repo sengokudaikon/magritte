@@ -10,7 +10,8 @@ pub trait Returns {
         self
     }
     /// Specify which fields to return from mutations (CREATE, UPDATE, DELETE)
-    /// ```rust,ignore /// # use magritte::QB;
+    /// ```rust,ignore
+    /// # use magritte::QB;
     /// # use surrealdb::Surreal;
     /// # async fn example(db: Surreal<surrealdb::engine::any::Any>) {
     /// let query = QB::<Person>::create(db)
