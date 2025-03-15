@@ -1,4 +1,4 @@
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use crate::IndexSpecifics;
 use anyhow::bail;
 use std::fmt::Display;
@@ -142,13 +142,280 @@ impl DefineIndexStatement {
         Ok(stmt)
     }
 
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 
 impl Display for DefineIndexStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.build().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::types::index::IndexSpecifics;
+    use crate::backend::vector_search::{VectorDistance, VectorType};
+
+    #[test]
+    fn test_empty_index() {
+        let stmt = DefineIndexStatement::new();
+        assert_eq!(stmt.build().unwrap(), "");
+    }
+
+    #[test]
+    fn test_basic_index() {
+        let stmt = DefineIndexStatement::new()
+            .name("userAgeIndex")
+            .table("user")
+            .columns(vec!["age".to_string()]);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userAgeIndex ON user COLUMNS age;");
+    }
+
+    #[test]
+    fn test_fields_alternative() {
+        let stmt = DefineIndexStatement::new()
+            .name("userAgeIndex")
+            .table("user")
+            .fields(vec!["age".to_string()]);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userAgeIndex ON user FIELDS age;");
+    }
+
+    #[test]
+    fn test_unique_index() {
+        let stmt = DefineIndexStatement::new()
+            .name("userEmailIndex")
+            .table("user")
+            .columns(vec!["email".to_string()])
+            .unique();
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userEmailIndex ON user COLUMNS email UNIQUE;");
+    }
+
+    #[test]
+    fn test_composite_index() {
+        let stmt = DefineIndexStatement::new()
+            .name("test")
+            .table("user")
+            .fields(vec!["account".to_string(), "email".to_string()]);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX test ON user FIELDS account, email;");
+    }
+
+    #[test]
+    fn test_composite_unique_index() {
+        let stmt = DefineIndexStatement::new()
+            .name("test")
+            .table("user")
+            .fields(vec!["account".to_string(), "email".to_string()])
+            .unique();
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX test ON user FIELDS account, email UNIQUE;");
+    }
+
+    #[test]
+    fn test_index_with_comment() {
+        let stmt = DefineIndexStatement::new()
+            .name("userEmailIndex")
+            .table("user")
+            .columns(vec!["email".to_string()])
+            .unique()
+            .comment("Ensures email uniqueness");
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userEmailIndex ON user COLUMNS email UNIQUE COMMENT \"Ensures email uniqueness\";");
+    }
+
+    #[test]
+    fn test_index_with_overwrite() {
+        let stmt = DefineIndexStatement::new()
+            .name("userEmailIndex")
+            .table("user")
+            .columns(vec!["email".to_string()])
+            .overwrite();
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX OVERWRITE userEmailIndex ON user COLUMNS email;");
+    }
+
+    #[test]
+    fn test_index_if_not_exists() {
+        let stmt = DefineIndexStatement::new()
+            .name("userEmailIndex")
+            .table("user")
+            .columns(vec!["email".to_string()])
+            .if_not_exists();
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX IF NOT EXISTS userEmailIndex ON user COLUMNS email;");
+    }
+
+    #[test]
+    fn test_index_concurrently() {
+        let stmt = DefineIndexStatement::new()
+            .name("userEmailIndex")
+            .table("user")
+            .columns(vec!["email".to_string()])
+            .concurrently();
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userEmailIndex ON user COLUMNS email CONCURRENTLY;");
+    }
+
+    #[test]
+    fn test_search_index() {
+        let specifics = IndexSpecifics::Search {
+            analyzer: Some("ascii".to_string()),
+            bm25: None,
+            highlights: true,
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("userNameIndex")
+            .table("user")
+            .columns(vec!["name".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userNameIndex ON user COLUMNS name SEARCH ANALYZER ascii  HIGHLIGHTS;");
+    }
+
+    #[test]
+    fn test_search_index_with_bm25() {
+        let specifics = IndexSpecifics::Search {
+            analyzer: Some("ascii".to_string()),
+            bm25: Some((1.2, 0.75)), // common BM25 parameters
+            highlights: true,
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("userNameIndex")
+            .table("user")
+            .columns(vec!["name".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX userNameIndex ON user COLUMNS name SEARCH ANALYZER ascii BM25(1.2, 0.75) HIGHLIGHTS;");
+    }
+
+    #[test]
+    fn test_mtree_index() {
+        let specifics = IndexSpecifics::MTREE {
+            dimension: 3,
+            vector_type: None,
+            dist: VectorDistance::Euclidean,
+            capacity: None,
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("mt_pt")
+            .table("pts")
+            .fields(vec!["point".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX mt_pt ON pts FIELDS point MTREE DIMENSION 3DIST euclidean;");
+    }
+
+    #[test]
+    fn test_mtree_index_with_distance() {
+        let specifics = IndexSpecifics::MTREE {
+            dimension: 4,
+            vector_type: None,
+            dist: VectorDistance::Manhattan,
+            capacity: None,
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("idx_mtree_embedding_manhattan")
+            .table("Document")
+            .fields(vec!["items.embedding".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX idx_mtree_embedding_manhattan ON Document FIELDS items.embedding MTREE DIMENSION 4DIST manhattan;");
+    }
+
+    #[test]
+    fn test_mtree_index_with_type_and_capacity() {
+        let specifics = IndexSpecifics::MTREE {
+            dimension: 4,
+            vector_type: Some(VectorType::I64),
+            dist: VectorDistance::Euclidean,
+            capacity: Some(50),
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("idx_mtree_embedding")
+            .table("Document")
+            .fields(vec!["items.embedding".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX idx_mtree_embedding ON Document FIELDS items.embedding MTREE DIMENSION 4 TYPE i64DIST euclidean CAPACITY 50;");
+    }
+
+    #[test]
+    fn test_hnsw_index() {
+        let specifics = IndexSpecifics::HNSW {
+            dimension: 4,
+            vector_type: None,
+            dist: VectorDistance::Euclidean,
+            efc: None,
+            m: None,
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("mt_pts")
+            .table("pts")
+            .fields(vec!["point".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX mt_pts ON pts FIELDS point HNSW DIMENSION 4DIST euclidean;");
+    }
+
+    #[test]
+    fn test_hnsw_index_with_parameters() {
+        let specifics = IndexSpecifics::HNSW {
+            dimension: 4,
+            vector_type: None,
+            dist: VectorDistance::Euclidean,
+            efc: Some(150),
+            m: Some(12),
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("mt_pts")
+            .table("pts")
+            .fields(vec!["point".to_string()])
+            .specifics(specifics);
+        
+        assert_eq!(stmt.to_string(), "DEFINE INDEX mt_pts ON pts FIELDS point HNSW DIMENSION 4DIST euclidean EFC 150 M 12;");
+    }
+
+    #[test]
+    fn test_missing_table() {
+        let stmt = DefineIndexStatement::new()
+            .name("userEmailIndex");
+            
+        assert!(stmt.build().unwrap_err().to_string().contains("Table name is required"));
+    }
+
+    #[test]
+    fn test_complex_index() {
+        let specifics = IndexSpecifics::MTREE {
+            dimension: 3,
+            vector_type: Some(VectorType::F32),
+            dist: VectorDistance::Cosine,
+            capacity: Some(100),
+        };
+        
+        let stmt = DefineIndexStatement::new()
+            .name("complex_index")
+            .table("vectors")
+            .fields(vec!["embedding".to_string()])
+            .specifics(specifics)
+            .comment("Vector similarity search index")
+            .concurrently();
+        
+        assert_eq!(
+            stmt.to_string(), 
+            "DEFINE INDEX complex_index ON vectors FIELDS embedding MTREE DIMENSION 3 TYPE f32DIST cosine CAPACITY 100 COMMENT \"Vector similarity search index\" CONCURRENTLY;"
+        );
     }
 }

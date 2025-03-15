@@ -14,7 +14,6 @@ pub mod entity;
 pub mod entity_crud;
 pub mod snapshot;
 
-pub use entity::manager::registry::EntityProxyRegistration;
 pub use entity::relation::LoadStrategy;
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;

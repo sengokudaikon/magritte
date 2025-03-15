@@ -11,7 +11,7 @@ pub mod select;
 pub mod update;
 pub mod upsert;
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{QueryType, SurrealDB};
 pub use alter::*;
 pub use create::*;
 pub use delete::*;

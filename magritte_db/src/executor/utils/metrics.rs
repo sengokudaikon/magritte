@@ -9,6 +9,12 @@ pub struct ExecutorMetrics {
     pub total_query_time: AtomicUsize,
 }
 
+impl Default for ExecutorMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutorMetrics {
     pub fn new() -> Self {
         Self {

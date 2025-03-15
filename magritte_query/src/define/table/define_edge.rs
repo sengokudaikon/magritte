@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use std::time::Duration;
 use tracing::{error, info};
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Clone, Debug)]
 pub struct DefineEdgeStatement<T: EdgeType> {
@@ -236,8 +236,8 @@ where
         Ok(stmt)
     }
 
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<T>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

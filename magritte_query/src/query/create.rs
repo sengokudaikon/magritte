@@ -14,7 +14,7 @@ use serde::Serialize;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::{error, info, instrument};
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -206,8 +206,8 @@ where
 
     /// Execute the CREATE query
     #[instrument(skip_all)]
-    async fn execute(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Write, Some(T::table_name().to_string())).await
+    async fn execute(self, ) -> Result<Vec<T>> {
+        db().execute(self.build()?, self.parameters).await
     }
 }
 

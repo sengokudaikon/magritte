@@ -22,7 +22,7 @@
 //! - Authentication as root owner/editor or namespace owner/editor
 //! - Selected namespace before using the statement
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use tracing::{error, info};
@@ -94,8 +94,8 @@ impl DefineDatabaseStatement {
     }
 
     /// Executes the database definition statement on the database
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

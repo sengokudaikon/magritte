@@ -25,7 +25,7 @@
 //! - At least one table defined in the database
 //! - SurrealDB instance started with `SURREAL_EXPERIMENTAL_GRAPHQL=true`
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use anyhow::anyhow;
 use std::fmt::Display;
 use tracing::{error, info};
@@ -149,8 +149,8 @@ impl DefineConfigStatement {
     }
 
     /// Executes the GraphQL configuration statement on the database
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

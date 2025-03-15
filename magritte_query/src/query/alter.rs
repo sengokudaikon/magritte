@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use surrealdb::engine::any::Any;
 use surrealdb::Surreal;
 use tracing::instrument;
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 
 /// ALTER query builder with allowed method chains
 #[derive(Clone, Debug)]
@@ -139,8 +139,8 @@ impl AlterStatement {
 
     /// Execute the ALTER query
     #[instrument(skip_all)]
-    async fn execute<T: Send + DeserializeOwned + 'static>(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, vec![], QueryType::Write, self.table).await
+    async fn execute<T: Send + DeserializeOwned + 'static>(self, ) -> Result<Vec<T>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 impl Transactional for AlterStatement {

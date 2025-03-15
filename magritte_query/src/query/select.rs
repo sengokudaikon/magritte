@@ -6,7 +6,7 @@
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use crate::{
     Callable, CanCallFunctions, CountFunction, FromTarget, HasConditions, HasLetConditions,
     HasParams, HasProjections, HasVectorConditions, Indexable, Operator, OrderBy, Projection,
@@ -600,8 +600,8 @@ where
     }
 
     #[instrument(skip_all)]
-    pub async fn execute(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Read, None).await
+    pub async fn execute(self, ) -> Result<Vec<T>> {
+        db().execute(self.build()?, self.parameters).await
     }
 }
 impl<T> HasVectorConditions for SelectStatement<T>

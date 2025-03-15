@@ -180,10 +180,10 @@ impl FieldType {
         }
     }
 }
-impl From<String> for FieldType {
+impl From<&str> for FieldType {
     #[inline]
-    fn from(v: String) -> Self {
-        match v.as_str() {
+    fn from(v: &str) -> Self {
+        match v {
             "any" => FieldType::Any,
             "null" => FieldType::Null,
             "bool" => FieldType::Bool,
@@ -242,6 +242,12 @@ impl From<&FieldType> for Box<FieldType> {
     #[inline]
     fn from(v: &FieldType) -> Self {
         Box::new(v.clone())
+    }
+}
+
+impl From<String> for FieldType {
+    fn from(value: String) -> Self {
+        Self::from(value.as_str())
     }
 }
 

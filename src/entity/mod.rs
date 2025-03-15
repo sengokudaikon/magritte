@@ -8,12 +8,10 @@ pub mod column;
 pub mod edge;
 pub mod event;
 pub mod index;
-pub mod manager;
 pub mod relation;
 pub mod table;
+pub mod cache;
 
-// Re-export main types
-pub use manager::{cache::EntityCache, EntityManager};
 pub use relation::{LoadStrategy, RelationDef, RelationTrait};
 
 pub trait HasColumns {

@@ -28,10 +28,10 @@
 //!     .unwrap();
 //! ```
 
-use crate::database::SurrealDB;
+use magritte_db::{db, SurrealDB};
 use anyhow::bail;
 use std::fmt::Display;
-use crate::database::QueryType;
+use magritte_db::QueryType;
 
 /// Supported signing algorithms for JWT verification
 #[derive(Clone, Debug)]
@@ -230,8 +230,8 @@ impl DefineAccessStatement {
     }
 
     /// Executes the access control definition statement on the database
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None)
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![])
             .await
     }
 }

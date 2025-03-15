@@ -1,7 +1,5 @@
-use anyhow::Result;
 use serde_json::Value;
 use thiserror::Error;
-use tokio::sync::mpsc::Sender;
 
 /// A request to execute a query with its response channel
 #[derive(Debug, Clone)]

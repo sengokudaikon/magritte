@@ -3,7 +3,7 @@
 //! This module contains operations related to updating existing records in
 //! tables.
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use crate::transaction::Transactional;
 use crate::{
     FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
@@ -207,8 +207,8 @@ where
         Ok(query)
     }
 
-    pub async fn execute(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Write,Some(T::table_name().to_string())).await
+    pub async fn execute(self, ) -> Result<Vec<T>> {
+        db().execute(self.build()?, self.parameters).await
     }
 }
 impl<T> Returns for UpdateStatement<T>

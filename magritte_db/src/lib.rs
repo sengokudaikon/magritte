@@ -1,12 +1,12 @@
 pub mod executor;
-use crate::database::executor::utils::metrics::ExecutorMetrics;
+pub use crate::executor::core::types::QueryType;
+use crate::executor::utils::metrics::ExecutorMetrics;
 use anyhow::Result;
 pub(crate) use deadpool_surrealdb::Config as DbConfig;
 use deadpool_surrealdb::Runtime;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::sync::Arc;
-pub(crate) use crate::database::executor::core::types::QueryType;
+use std::sync::{Arc, OnceLock};
 
 /// Main database interface that handles connection management and query execution.
 /// Users should not interact with this directly, but through Query builders.
@@ -18,23 +18,21 @@ pub struct SurrealDB {
 
 impl SurrealDB {
     /// Create a new database instance with the given configuration
-    pub async fn new(config: DbConfig) -> Result<Arc<Self>> {
+    pub fn new(config: DbConfig) -> Result<Self> {
         // Create connection pool
         let pool = config
             .create_pool(Some(Runtime::Tokio1))
             .map_err(anyhow::Error::from)?;
         let metrics = Arc::new(ExecutorMetrics::new());
-        Ok(Arc::new(Self { pool, metrics }))
+        Ok(Self { pool, metrics })
     }
 
     /// Internal method to execute queries from Query builders.
     /// This is not public API - users should use Query builders instead.
-    pub(crate) async fn execute<T>(
+    pub async fn execute<T>(
         &self,
-        query: String,
+        query: impl ToString,
         params: Vec<(String, Value)>,
-        query_type: QueryType,
-        table_name: Option<String>,
     ) -> Result<Vec<T>>
     where
         T: DeserializeOwned + Send + 'static,
@@ -43,7 +41,7 @@ impl SurrealDB {
         let metrics = self.metrics.clone();
         let start = std::time::Instant::now();
         let result = {
-            let mut q = conn.query(&query);
+            let mut q = conn.query(query.to_string());
             if !params.is_empty() {
                 q = q.bind(params)
             }
@@ -66,3 +64,23 @@ impl SurrealDB {
 unsafe impl Send for SurrealDB {}
 
 unsafe impl Sync for SurrealDB {}
+
+static DB: OnceLock<SurrealDB> = OnceLock::new();
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("Database not initialized. Call init_db() first")]
+    DbNotInitialized,
+    #[error("Database already initialized")]
+    DbAlreadyInitialized,
+}
+pub fn init_db(config: DbConfig) -> Result<()> {
+    let db = SurrealDB::new(config)?;
+    DB.set(db).map_err(|_| Error::DbAlreadyInitialized)?;
+    Ok(())
+}
+
+pub fn db() -> &'static SurrealDB {
+    DB.get()
+        .expect("Database not initialized. Call init_db() first")
+}

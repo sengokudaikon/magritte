@@ -35,7 +35,7 @@
 use anyhow::{anyhow, bail};
 use std::fmt::Display;
 use tracing::{error, info};
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 
 /// Function argument definition
 #[derive(Clone, Debug)]
@@ -242,8 +242,8 @@ impl DefineFunctionStatement {
     }
 
     /// Executes the function definition statement on the database
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

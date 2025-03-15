@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use surrealdb::{Surreal, Value};
 use surrealdb::engine::any::Any;
 use tracing::instrument;
-use crate::database::SurrealDB;
+use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DbInfo {
@@ -39,21 +39,21 @@ impl InfoStatement {
     /// Get root level info (namespaces and users)
     #[instrument(skip(self))]
     pub async fn info_root(&self) -> anyhow::Result<JsonValue> {
-        let result: Value = self.conn.query("INFO FOR ROOT").await?.take(0)?;
+        let result:Option<serde_json::Value> = db().execute::<serde_json::Value>("INFO FOR ROOT", Default::default()).await?.first().cloned();
         Ok(serde_json::to_value(result)?)
     }
 
     /// Get namespace level info (databases, users, access)
     #[instrument(skip(self))]
     pub async fn info_ns(&self) -> anyhow::Result<JsonValue> {
-        let result: Value = self.conn.query("INFO FOR NS").await?.take(0)?;
+        let result: Option<serde_json::Value> = db().execute::<serde_json::Value>("INFO FOR NS", Default::default()).await?.first().cloned();
         Ok(serde_json::to_value(result)?)
     }
 
     /// Get database level info (tables, functions, users etc)
     #[instrument(skip(self))]
     pub async fn info_db(&self) -> anyhow::Result<DbInfo> {
-        let result: Option<DbInfo> = self.conn.query("INFO FOR DB").await?.take(0)?;
+        let result: Option<DbInfo> = db().execute::<DbInfo>("INFO FOR DB", Default::default()).await?.first().cloned();
         let db_info = result.ok_or(anyhow!("Could not deserialize DbInfo"))?;
         Ok(db_info)
     }
@@ -63,7 +63,7 @@ impl InfoStatement {
     pub async fn info_table(&self, table: &str) -> anyhow::Result<TableInfo> {
         let mut query = String::from("INFO FOR TABLE ");
         query.push_str(table);
-        let result: Option<TableInfo> = self.conn.query(query).await?.check()?.take(0)?;
+        let result: Option<TableInfo> = db().execute::<TableInfo>(query, Default::default()).await?.first().cloned();
         println!(
             "Info for {}: {}",
             table,
@@ -80,20 +80,23 @@ impl InfoStatement {
             None => format!("INFO FOR USER {}", user),
         };
 
-        let result: Value = self.conn.query(query).await?.take(0)?;
+        let result: Option<serde_json::Value> =db().execute::<serde_json::Value>(query, Default::default()).await?.first().cloned();
         Ok(serde_json::to_value(result)?)
     }
 
     /// Get index info
     #[instrument(skip(self))]
     pub async fn info_index(&self, index: &str, table: &str) -> anyhow::Result<JsonValue> {
-        let result: Value = self
-            .conn
-            .query("INFO FOR INDEX $index ON TABLE $Table")
-            .bind(("index", index.to_owned()))
-            .bind(("Table", table.to_owned()))
+        let result: Option<serde_json::Value> = db()
+            .execute::<serde_json::Value>(
+                "INFO FOR INDEX $index ON TABLE $Table",
+                vec![
+                    ("index".to_string(), serde_json::Value::String(index.to_string())),
+                    ("Table".to_string(), serde_json::Value::String(table.to_string()))
+                ]
+            )
             .await?
-            .take(0)?;
+            .first().cloned();
         Ok(serde_json::to_value(result)?)
     }
 }

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use crate::transaction::Transactional;
 use crate::{ReturnType, Returns};
 use anyhow::Result;
@@ -132,8 +132,8 @@ impl RelateStatement {
         Ok(query)
     }
 
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Write, Some(self.from_record)).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

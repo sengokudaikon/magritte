@@ -1,4 +1,4 @@
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use crate::{
     FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
     SurrealId,
@@ -204,8 +204,8 @@ where
         Ok(query)
     }
 
-    async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Write, Some(T::table_name().to_string())).await
+    async fn execute(self, ) -> anyhow::Result<Vec<T>> {
+        db().execute(self.build()?, self.parameters).await
     }
 }
 impl<T> Returns for UpsertStatement<T>

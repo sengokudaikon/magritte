@@ -5,7 +5,7 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::Duration;
 use tracing::{error, info};
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Debug, Default, Serialize, Deserialize, Hash, Clone, Eq, PartialEq, PartialOrd)]
 pub struct AsSelect {
@@ -237,8 +237,8 @@ where
         Ok(stmt)
     }
 
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<T>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<T>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

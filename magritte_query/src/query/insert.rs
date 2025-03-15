@@ -11,7 +11,7 @@ use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::Value;
 use tracing::{error, info, instrument};
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -266,8 +266,8 @@ where
         Ok(query)
     }
 
-    pub async fn execute(self, conn: &SurrealDB) -> Result<Vec<T>> {
-        conn.execute(self.build()?, self.parameters, QueryType::Write, Some(T::table_name().to_string())).await
+    pub async fn execute(self, ) -> Result<Vec<T>> {
+        db().execute(self.build()?, self.parameters).await
     }
 }
 impl<T> HasParams for InsertStatement<T>

@@ -1,7 +1,7 @@
-use crate::database::executor::core::config::BatchConfig;
-use crate::database::executor::core::types::{ExecutorError, QueryRequest, QueryType};
+use crate::executor::core::config::BatchConfig;
+use crate::executor::core::types::{ExecutorError, QueryRequest, QueryType};
 use dashmap::DashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::RwLock;
 
 /// A batch of queries grouped by type and table
@@ -93,7 +93,7 @@ impl QueryBatch {
         };
 
         let writes = {
-            let mut writes = DashMap::new();
+            let writes = DashMap::new();
             // Take ownership of entries from write_batches
             let keys: Vec<String> = self
                 .write_batches
@@ -101,7 +101,7 @@ impl QueryBatch {
                 .map(|entry| entry.key().clone())
                 .collect();
             for key in keys {
-                if let Some((_, mut value)) = self.write_batches.remove(&key) {
+                if let Some((_, value)) = self.write_batches.remove(&key) {
                     writes.insert(key, value);
                 }
             }

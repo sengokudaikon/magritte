@@ -24,7 +24,7 @@
 //! - Authentication as root/namespace/database owner or editor
 //! - Namespace and database must be selected
 
-use crate::database::{QueryType, SurrealDB};
+use magritte_db::{db, QueryType, SurrealDB};
 use anyhow::bail;
 use serde::Serialize;
 use std::fmt::Display;
@@ -165,8 +165,8 @@ impl DefineParamStatement {
     }
 
     /// Executes the parameter definition statement on the database
-    pub async fn execute(self, conn: &SurrealDB) -> anyhow::Result<Vec<serde_json::Value>> {
-        conn.execute(self.build()?, vec![], QueryType::Schema, None).await
+    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+        db().execute(self.build()?, vec![]).await
     }
 }
 

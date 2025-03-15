@@ -1,10 +1,10 @@
+use std::cell::OnceCell;
 use crate::RelationDef;
 use anyhow::{anyhow, Result};
 use moka::future::Cache;
 use serde_json::Value;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tokio::sync::OnceCell;
 
 type EntityKey = String;
 // (from_table, via_edge, to_table)
@@ -131,8 +131,8 @@ impl EntityCache {
     }
 }
 
-static CACHE: OnceCell<EntityCache> = OnceCell::const_new();
+static CACHE: OnceLock<EntityCache> = OnceLock::new();
 
-pub async fn global_cache() -> &'static EntityCache {
-    CACHE.get_or_init(|| async { EntityCache::new() }).await
+pub fn global_cache() -> &'static EntityCache {
+    CACHE.get_or_init(EntityCache::new)
 }
