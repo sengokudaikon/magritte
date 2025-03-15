@@ -3,13 +3,13 @@
 //! This module contains operations related to updating existing records in
 //! tables.
 
-use magritte_db::{db, QueryType, SurrealDB};
-use crate::transaction::Transactional;
-use crate::{
-    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
-    SurrealId,
-};
+use crate::{FromTarget, HasConditions, HasParams, HasReturns};
 use anyhow::Result;
+use magritte_core::operator::Operator;
+use magritte_core::transaction::Transactional;
+use magritte_core::value::SqlValue;
+use magritte_core::{RecordType, ReturnType, SurrealId};
+use magritte_db::db;
 use serde::Serialize;
 use serde_json::Value;
 use std::marker::PhantomData;
@@ -207,11 +207,11 @@ where
         Ok(query)
     }
 
-    pub async fn execute(self, ) -> Result<Vec<T>> {
+    pub async fn execute(self) -> Result<Vec<T>> {
         db().execute(self.build()?, self.parameters).await
     }
 }
-impl<T> Returns for UpdateStatement<T>
+impl<T> HasReturns for UpdateStatement<T>
 where
     T: RecordType,
 {

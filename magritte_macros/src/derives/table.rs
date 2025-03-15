@@ -16,7 +16,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     let crate_name = get_crate_name(false);
 
     // Use shared table name resolution
-    let table_name = resolve_table_name(&table_attr, ident);
+    let table_name = resolve_table_name(&table_attr, ident)?;
     if table_name == "Dummy" {
         return Ok(quote!());
     }
@@ -71,7 +71,12 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
     };
 
     let changefeed = if let Some(duration) = &table_attr.changefeed {
-        let duration: u64 = duration.parse().unwrap();
+        let duration: u64 = duration.parse().map_err(|e| {
+            syn::Error::new_spanned(
+                ident,
+                format!("Invalid changefeed duration value: {}", e),
+            )
+        })?;
         let include_original = table_attr.include_original;
         quote!(Some((#duration, #include_original)))
     } else {

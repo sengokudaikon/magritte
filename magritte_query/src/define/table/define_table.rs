@@ -1,10 +1,10 @@
-use crate::{Permission, SchemaType, TableType};
 use anyhow::{anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use std::time::Duration;
 use tracing::{error, info};
+use magritte_core::{Permission, SchemaType, TableType};
 use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Debug, Default, Serialize, Deserialize, Hash, Clone, Eq, PartialEq, PartialOrd)]

@@ -4,17 +4,15 @@
 
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::Arc;
 use std::time::Duration;
 
-use crate::transaction::Transactional;
-use crate::{FromTarget, RangeTarget, RecordType, ReturnType, Returns, SurrealId};
-use anyhow::{anyhow, Result};
+use crate::{FromTarget, HasReturns};
+use anyhow::Result;
+use magritte_core::transaction::Transactional;
+use magritte_core::{RangeTarget, RecordType, ReturnType, SurrealId};
+use magritte_db::db;
 use serde::Serialize;
-use surrealdb::engine::any::Any;
-use surrealdb::Surreal;
-use tracing::{error, info, instrument};
-use magritte_db::{db, QueryType, SurrealDB};
+use tracing::instrument;
 
 #[derive(Debug, Clone)]
 pub enum Content {
@@ -206,12 +204,12 @@ where
 
     /// Execute the CREATE query
     #[instrument(skip_all)]
-    async fn execute(self, ) -> Result<Vec<T>> {
+    async fn execute(self) -> Result<Vec<T>> {
         db().execute(self.build()?, self.parameters).await
     }
 }
 
-impl<T> Returns for CreateStatement<T>
+impl<T> HasReturns for CreateStatement<T>
 where
     T: RecordType,
 {

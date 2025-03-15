@@ -1,13 +1,13 @@
-use magritte_db::{db, QueryType, SurrealDB};
-use crate::{
-    FromTarget, HasConditions, HasParams, Operator, RecordType, ReturnType, Returns, SqlValue,
-    SurrealId,
-};
+use crate::{FromTarget, HasConditions, HasParams, HasReturns};
+use magritte_core::value::SqlValue;
+use magritte_core::{RecordType, ReturnType, SurrealId};
+use magritte_db::db;
 use serde::Serialize;
 use serde_json::Value;
 use std::marker::PhantomData;
 use std::time::Duration;
 use tracing::instrument;
+use magritte_core::operator::Operator;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -204,11 +204,11 @@ where
         Ok(query)
     }
 
-    async fn execute(self, ) -> anyhow::Result<Vec<T>> {
+    async fn execute(self) -> anyhow::Result<Vec<T>> {
         db().execute(self.build()?, self.parameters).await
     }
 }
-impl<T> Returns for UpsertStatement<T>
+impl<T> HasReturns for UpsertStatement<T>
 where
     T: RecordType,
 {

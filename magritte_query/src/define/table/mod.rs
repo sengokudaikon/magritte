@@ -2,7 +2,7 @@ use crate::define::table::define_table::DefineTableStatement;
 use crate::query::alter::AlterStatement;
 use crate::query::delete::DeleteStatement;
 use crate::query::update::UpdateStatement;
-use crate::types::TableType;
+use magritte_core::TableType;
 use std::marker::PhantomData;
 
 pub mod define_edge;

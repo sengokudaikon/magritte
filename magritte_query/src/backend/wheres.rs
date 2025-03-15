@@ -1,8 +1,9 @@
-use crate::backend::value::SqlValue;
-use crate::conditions::Operator;
 use crate::expr::{HasConditions, HasParams};
-use crate::{Callable, RecordType, SelectStatement};
+use crate::{Callable, SelectStatement};
 use anyhow::anyhow;
+use magritte_core::operator::Operator;
+use magritte_core::value::SqlValue;
+use magritte_core::RecordType;
 use serde::Serialize;
 use tracing::instrument;
 

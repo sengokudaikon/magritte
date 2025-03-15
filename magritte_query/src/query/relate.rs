@@ -1,9 +1,10 @@
 use std::time::Duration;
 
-use magritte_db::{db, QueryType, SurrealDB};
-use crate::transaction::Transactional;
-use crate::{ReturnType, Returns};
+use crate::HasReturns;
 use anyhow::Result;
+use magritte_core::transaction::Transactional;
+use magritte_core::ReturnType;
+use magritte_db::db;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -132,12 +133,12 @@ impl RelateStatement {
         Ok(query)
     }
 
-    pub async fn execute(self, ) -> anyhow::Result<Vec<serde_json::Value>> {
+    pub async fn execute(self) -> anyhow::Result<Vec<serde_json::Value>> {
         db().execute(self.build()?, vec![]).await
     }
 }
 
-impl Returns for RelateStatement {
+impl HasReturns for RelateStatement {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType> {
         &mut self.return_type
     }

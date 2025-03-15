@@ -10,3 +10,4 @@ Cargo.lock
 /sea-orm-master
 /sea-query-master
 .aider*
+/surrealdb/

@@ -37,6 +37,7 @@ time = { version = "0.3.36", optional = true }
 rand = { version = "0.8.5",features = ["default", "serde1"] }
 log = { version = "0.4", default-features = false }
 thiserror = "2.0.11"
+magritte_core = {path = "../magritte_core"}
 magritte_db = { path = "../magritte_db"}
 [profile.bench]
 debug = true
@@ -47,11 +48,8 @@ flamegraph = "0.6.7"
 tokio = { version = "1.43.0",features = ["full"] }
 
 [features]
-thread-safe = []
 tests-cfg = []
-default = [
-    "thread-safe",
-]
+default = []
 with-chrono = ["default", "chrono"]
 with-time = ["default", "time"]
 with-rust_decimal = ["default", "rust_decimal"]

@@ -68,7 +68,12 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
     };
 
     let changefeed = if let Some(duration) = &attrs.changefeed {
-        let duration: u64 = duration.parse().unwrap();
+        let duration: u64 = duration.parse().map_err(|e| {
+            syn::Error::new_spanned(
+                ident,
+                format!("Invalid changefeed duration value: {}", e),
+            )
+        })?;
         let include_original = attrs.include_original;
         quote!(Some((#duration, #include_original)))
     } else {

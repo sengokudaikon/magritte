@@ -1,14 +1,7 @@
 use heck::ToSnakeCase;
-use magritte_query::types::TableType;
-use magritte_query::{FieldType, Literal};
-use proc_macro::Ident;
-use quote::quote;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fmt;
 use std::fmt::Display;
-use std::str::FromStr;
 use syn::{DataEnum, Fields, Lit, Type, TypeArray, TypePath};
+use magritte_core::FieldType;
 
 fn handle_set_type(args: &syn::PathArguments) -> FieldType {
     if let syn::PathArguments::AngleBracketed(args) = args {

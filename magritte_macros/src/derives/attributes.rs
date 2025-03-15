@@ -5,6 +5,7 @@ use quote::{quote, ToTokens};
 use serde::ser::Error;
 use std::fmt::{Display, Formatter};
 use syn::{DeriveInput, Expr, ExprArray, LitStr, Path};
+use regex::Regex;
 
 #[derive(Default, ParseMetaItem)]
 pub struct AsSelect {
@@ -613,10 +614,29 @@ pub trait HasTableName {
     fn table_name(&self) -> Option<String>;
 }
 
-pub fn resolve_table_name(attrs: &impl HasTableName, ident: &syn::Ident) -> String {
-    attrs
+/// Validates a table or column name to ensure it follows SurrealDB naming rules
+/// and doesn't contain SQL injection patterns
+pub fn validate_name(name: &str) -> bool {
+    // Only allow alphanumeric characters, underscores and hyphens
+    // This helps prevent SQL injection in table/column names
+    let pattern = Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap();
+    pattern.is_match(name)
+}
+
+pub fn resolve_table_name(attrs: &impl HasTableName, ident: &syn::Ident) -> syn::Result<String> {
+    let name = attrs
         .table_name()
-        .unwrap_or_else(|| ident.to_string().to_snake_case())
+        .unwrap_or_else(|| ident.to_string().to_snake_case());
+    
+    // Validate the table name for security
+    if !validate_name(&name) {
+        return Err(syn::Error::new_spanned(
+            ident,
+            format!("Invalid table name: '{}'. Table names must only contain alphanumeric characters, underscores and hyphens", name)
+        ));
+    }
+    
+    Ok(name)
 }
 
 impl HasTableName for Table {

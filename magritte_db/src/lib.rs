@@ -40,8 +40,9 @@ impl SurrealDB {
         let conn = self.pool.get().await?;
         let metrics = self.metrics.clone();
         let start = std::time::Instant::now();
+        let query_string = query.to_string();
         let result = {
-            let mut q = conn.query(query.to_string());
+            let mut q = conn.query(query_string.clone());
             if !params.is_empty() {
                 q = q.bind(params)
             }
@@ -51,18 +52,25 @@ impl SurrealDB {
         match result {
             Ok(mut response) => {
                 metrics.update_success(start.elapsed().as_micros() as usize);
-                response.take(0).map_err(anyhow::Error::from)
+                response.take(0).map_err(|e| {
+                    anyhow::anyhow!("Failed to process response: {}", e)
+                })
             }
             Err(e) => {
                 metrics.update_failure();
-                Err(anyhow::anyhow!(e))
+                Err(anyhow::anyhow!("Query execution failed: {} - Query: {}", e, query_string))
             }
         }
     }
 }
 
+// SurrealDB can be safely shared between threads because:
+// 1. The underlying pool from deadpool_surrealdb is already Send + Sync
+// 2. The metrics are protected by Arc which is thread-safe
+// 3. No interior mutability is used without proper synchronization
 unsafe impl Send for SurrealDB {}
 
+// Same reasoning applies for Sync trait implementation
 unsafe impl Sync for SurrealDB {}
 
 static DB: OnceLock<SurrealDB> = OnceLock::new();

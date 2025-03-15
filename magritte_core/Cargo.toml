@@ -1,0 +1,17 @@
+[package]
+name = "magritte_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+strum = "0.27.1"
+uuid = { version = "1.16.0", optional = true }
+serde_json = "1.0.140"
+anyhow = "1.0.97"
+surrealdb = "2"
+
+
+[features]
+default = []
+with-uuid = ["default", "uuid"]

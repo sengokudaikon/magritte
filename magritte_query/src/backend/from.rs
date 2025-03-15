@@ -1,6 +1,6 @@
 use crate::query_result::{FromTarget, QueryResult};
-use crate::types::{RecordType, SurrealId};
 use crate::SelectStatement;
+use magritte_core::{RecordType, SurrealId};
 
 pub trait FromClause<T>
 where

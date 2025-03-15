@@ -23,8 +23,8 @@ pub fn expand_derive_column(mut input: DeriveInput) -> syn::Result<TokenStream> 
     let attrs = Table::extract_attributes(&mut input.attrs)?;
     let entity_name = &input.ident;
 
-    let table_name = resolve_table_name(&attrs, entity_name);
-    let table_name_str = &*table_name;
+    let table_name = resolve_table_name(&attrs, entity_name)?;
+    let table_name_str = &table_name;
     let column_enum_name = format_ident!("{}Columns", entity_name);
     let data = match &input.data {
         Data::Struct(data) => data,

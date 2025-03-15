@@ -1,4 +1,3 @@
-use crate::{HasParams, RecordType};
 use surrealdb::{Response, Surreal};
 
 pub mod alter;
@@ -11,7 +10,6 @@ pub mod select;
 pub mod update;
 pub mod upsert;
 
-use magritte_db::{QueryType, SurrealDB};
 pub use alter::*;
 pub use create::*;
 pub use delete::*;
@@ -21,9 +19,10 @@ pub use relate::*;
 pub use select::*;
 use serde_json::Value;
 use surrealdb::engine::any::Any;
-use surrealdb::opt::auth::Database;
 pub use update::*;
 pub use upsert::*;
+use magritte_core::RecordType;
+use crate::HasParams;
 
 /// Shorthand for constructing any Table query
 #[derive(Debug, Clone)]
@@ -126,17 +125,20 @@ impl TransactionStatement {
     }
 
     pub fn commit(mut self) -> Self {
-        self.statements.push(("COMMIT TRANSACTION;".to_string(), vec![]));
+        self.statements
+            .push(("COMMIT TRANSACTION;".to_string(), vec![]));
         self
     }
 
     pub fn rollback(mut self) -> Self {
-        self.statements.push(("CANCEL TRANSACTION;".to_string(), vec![]));
+        self.statements
+            .push(("CANCEL TRANSACTION;".to_string(), vec![]));
         self
     }
 
     pub fn then<S: StatementBuilder>(mut self, statement: S) -> Self {
-        self.statements.push((statement.build().unwrap(), statement.with_params()));
+        self.statements
+            .push((statement.build().unwrap(), statement.with_params()));
         self
     }
     pub fn build(&self) -> (String, Vec<(String, Value)>) {
@@ -155,7 +157,8 @@ impl TransactionStatement {
             let mut renamed_params = Vec::new();
             for (param_name, value) in params {
                 let new_param_name = format!("p{}", param_counter);
-                formatted_query = formatted_query.replace(&format!("${}", param_name), &format!("${}", new_param_name));
+                formatted_query = formatted_query
+                    .replace(&format!("${}", param_name), &format!("${}", new_param_name));
                 renamed_params.push((new_param_name, value.clone()));
                 param_counter += 1;
             }
@@ -168,7 +171,11 @@ impl TransactionStatement {
         }
 
         // Clean up extra delimiters
-        query_string = query_string.replace(";;", ";").replace("; ;", ";").trim().to_string();
+        query_string = query_string
+            .replace(";;", ";")
+            .replace("; ;", ";")
+            .trim()
+            .to_string();
 
         (query_string, all_params)
     }

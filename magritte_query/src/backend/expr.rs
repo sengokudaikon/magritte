@@ -1,7 +1,6 @@
-use crate::backend::value::SqlValue;
-use crate::conditions::Operator;
-use crate::types::Projection;
-use crate::vector_search::VectorCondition;
+use magritte_core::operator::Operator;
+use magritte_core::value::SqlValue;
+use magritte_core::{Projection, VectorCondition};
 use serde_json::Value;
 
 pub trait HasVectorConditions {
@@ -26,12 +25,12 @@ pub trait HasLetConditions {
     fn get_lets_mut(&mut self) -> &mut Vec<(String, String)>;
 }
 
-pub trait Lets {
-    fn lets(self, var: &str, expr: &str) -> Self;
+pub trait LetBinding {
+    fn let_(self, var: &str, expr: &str) -> Self;
 }
 
-impl<T: HasLetConditions> Lets for T {
-    fn lets(mut self, var: &str, expr: &str) -> Self {
+impl<T: HasLetConditions> LetBinding for T {
+    fn let_(mut self, var: &str, expr: &str) -> Self {
         self.get_lets_mut()
             .push((var.to_string(), expr.to_string()));
         self

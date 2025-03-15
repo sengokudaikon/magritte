@@ -1,6 +1,6 @@
-use crate::types::ReturnType;
+use magritte_core::ReturnType;
 
-pub trait Returns {
+pub trait HasReturns {
     fn return_type_mut(&mut self) -> &mut Option<ReturnType>;
     fn return_(mut self, return_type: ReturnType) -> Self
     where

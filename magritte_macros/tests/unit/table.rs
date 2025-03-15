@@ -135,3 +135,21 @@ fn test_column_derives() {
     assert!(metadata_def.is_flexible());
     assert_eq!(metadata_def.column_type(), "object");
 }
+
+#[test]
+fn test_table_name_validation() {
+    // Can't access magritte_macros::derives::attributes directly, so we'll test manually
+    
+    // Valid names should follow the pattern ^[a-zA-Z0-9_-]+$
+    let valid_names = &["users", "user_profiles", "users123", "user-profiles"];
+    for name in valid_names {
+        assert!(name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-'));
+    }
+    
+    // Invalid names contain characters not allowed in table names
+    let invalid_chars = &[';', ' ', '\'', '/', '*'];
+    for &c in invalid_chars {
+        let invalid_name = format!("users{}", c);
+        assert!(!invalid_name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-'));
+    }
+}

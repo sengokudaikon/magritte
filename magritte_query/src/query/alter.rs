@@ -1,12 +1,9 @@
-use crate::transaction::Transactional;
-use crate::{Permission, SchemaType};
 use anyhow::Result;
-use std::sync::Arc;
+use magritte_core::transaction::Transactional;
+use magritte_core::{Permission, SchemaType};
+use magritte_db::db;
 use serde::de::DeserializeOwned;
-use surrealdb::engine::any::Any;
-use surrealdb::Surreal;
 use tracing::instrument;
-use magritte_db::{db, QueryType, SurrealDB};
 
 /// ALTER query builder with allowed method chains
 #[derive(Clone, Debug)]
@@ -139,7 +136,7 @@ impl AlterStatement {
 
     /// Execute the ALTER query
     #[instrument(skip_all)]
-    async fn execute<T: Send + DeserializeOwned + 'static>(self, ) -> Result<Vec<T>> {
+    async fn execute<T: Send + DeserializeOwned + 'static>(self) -> Result<Vec<T>> {
         db().execute(self.build()?, vec![]).await
     }
 }

@@ -1,6 +1,6 @@
 //! Query result types for SurrealDB queries
 
-use crate::types::{RangeTarget, RecordType, SurrealId};
+use magritte_core::{RangeTarget, RecordType, SurrealId};
 use serde_json::Value;
 use std::fmt::{self, Debug, Display};
 

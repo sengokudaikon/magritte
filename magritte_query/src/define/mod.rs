@@ -12,22 +12,22 @@ pub(crate) mod table;
 pub(crate) mod token;
 pub(crate) mod user;
 
-use crate::{EdgeType, TableType};
 pub use access::*;
 pub use analyzer::*;
 pub use config::*;
 pub use database::*;
+pub use define_edge::*;
+pub use define_table::*;
 pub use event::*;
 pub use field::*;
 pub use function::*;
 pub use index::*;
+use magritte_core::{EdgeType, TableType};
 pub use namespace::*;
 pub use param::*;
 pub use table::*;
 pub use token::*;
 pub use user::*;
-pub use define_edge::*;
-pub use define_table::*;
 
 #[derive(Debug, Clone)]
 pub struct Define;

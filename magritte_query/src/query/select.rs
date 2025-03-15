@@ -6,13 +6,17 @@
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use magritte_db::{db, QueryType, SurrealDB};
 use crate::{
     Callable, CanCallFunctions, CountFunction, FromTarget, HasConditions, HasLetConditions,
-    HasParams, HasProjections, HasVectorConditions, Indexable, Operator, OrderBy, Projection,
-    RangeTarget, RecordType, SqlValue, SurrealId, VectorCondition, VectorSearch,
+    HasParams, HasProjections, HasVectorConditions, VectorSearchable,
 };
 use anyhow::{bail, Result};
+use magritte_core::operator::Operator;
+use magritte_core::value::SqlValue;
+use magritte_core::{
+    Indexable, OrderBy, Projection, RangeTarget, RecordType, SurrealId, VectorCondition,
+};
+use magritte_db::db;
 use serde::Serialize;
 use serde_json::Value;
 use tracing::instrument;
@@ -600,7 +604,7 @@ where
     }
 
     #[instrument(skip_all)]
-    pub async fn execute(self, ) -> Result<Vec<T>> {
+    pub async fn execute(self) -> Result<Vec<T>> {
         db().execute(self.build()?, self.parameters).await
     }
 }

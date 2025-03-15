@@ -1,10 +1,9 @@
 use crate::define_table::AsSelect;
-use crate::{EdgeType, Permission, SchemaType, TableType};
-use anyhow::{anyhow, bail};
+use anyhow::bail;
+use magritte_core::{EdgeType, Permission, SchemaType};
+use magritte_db::db;
 use std::fmt::Display;
 use std::time::Duration;
-use tracing::{error, info};
-use magritte_db::{db, QueryType, SurrealDB};
 
 #[derive(Clone, Debug)]
 pub struct DefineEdgeStatement<T: EdgeType> {
@@ -236,7 +235,7 @@ where
         Ok(stmt)
     }
 
-    pub async fn execute(self, ) -> anyhow::Result<Vec<T>> {
+    pub async fn execute(self) -> anyhow::Result<Vec<T>> {
         db().execute(self.build()?, vec![]).await
     }
 }

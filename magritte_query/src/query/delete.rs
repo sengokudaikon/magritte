@@ -6,16 +6,16 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::time::Duration;
 
-use crate::transaction::Transactional;
-use crate::{
-    FromTarget, HasConditions, HasParams, Operator, RangeTarget, RecordType, ReturnType, Returns,
-    SqlValue, SurrealId, WhereClause,
-};
-use anyhow::{anyhow, bail};
+use crate::{FromTarget, HasConditions, HasParams, HasReturns, WhereClause};
+use anyhow::bail;
+use magritte_core::operator::Operator;
+use magritte_core::transaction::Transactional;
+use magritte_core::value::SqlValue;
+use magritte_core::{RangeTarget, RecordType, ReturnType, SurrealId};
+use magritte_db::db;
 use serde::Serialize;
 use serde_json::Value;
-use tracing::{error, info, instrument};
-use magritte_db::{db, QueryType, SurrealDB};
+use tracing::instrument;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DeleteStatement<T>
@@ -166,7 +166,7 @@ where
         Ok(query)
     }
     #[instrument(skip_all)]
-    pub async fn execute(self, ) -> anyhow::Result<Vec<T>> {
+    pub async fn execute(self) -> anyhow::Result<Vec<T>> {
         db().execute(self.build()?, self.parameters).await
     }
 }
@@ -190,7 +190,7 @@ where
         &mut self.conditions
     }
 }
-impl<T> Returns for DeleteStatement<T>
+impl<T> HasReturns for DeleteStatement<T>
 where
     T: RecordType,
 {

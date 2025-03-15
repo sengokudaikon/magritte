@@ -1,8 +1,7 @@
-use crate::{FieldType, Permission, database};
-use anyhow::{anyhow, bail};
+use anyhow::bail;
+use magritte_db::db;
 use std::fmt::Display;
-use tracing::{error, info};
-use magritte_db::{db, QueryType};
+use magritte_core::{FieldType, Permission};
 
 #[derive(Clone, Debug, Default)]
 pub struct DefineFieldStatement {
@@ -187,7 +186,7 @@ mod tests {
         let stmt = DefineFieldStatement::new()
             .name("email")
             .table_name("user");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD email ON TABLE user;");
     }
 
@@ -197,7 +196,7 @@ mod tests {
             .name("email")
             .table_name("user")
             .column_type("string");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD email ON TABLE user TYPE string;");
     }
 
@@ -208,7 +207,7 @@ mod tests {
             .table_name("user")
             .column_type("bool")
             .default("false");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD locked ON TABLE user TYPE bool DEFAULT false;");
     }
 
@@ -219,7 +218,7 @@ mod tests {
             .table_name("user")
             .column_type("string")
             .assert("string::is::email($value)");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD email ON TABLE user TYPE string ASSERT string::is::email($value);");
     }
 
@@ -230,7 +229,7 @@ mod tests {
             .table_name("user")
             .column_type("string")
             .value("string::lowercase($value)");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD email ON TABLE user TYPE string VALUE string::lowercase($value);");
     }
 
@@ -241,7 +240,7 @@ mod tests {
             .table_name("resource")
             .value("time::now()")
             .readonly();
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD created ON TABLE resource VALUE time::now() READONLY;");
     }
 
@@ -252,7 +251,7 @@ mod tests {
             .table_name("user")
             .flexible()
             .column_type("object");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD metadata ON TABLE user FLEXIBLE TYPE object;");
     }
 
@@ -263,7 +262,7 @@ mod tests {
             .table_name("user")
             .column_type("string")
             .comment("User's email address");
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD email ON TABLE user TYPE string COMMENT \"User's email address\";");
     }
 
@@ -274,7 +273,7 @@ mod tests {
             .table_name("user")
             .column_type("string")
             .overwrite();
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD OVERWRITE email ON TABLE user TYPE string;");
     }
 
@@ -285,7 +284,7 @@ mod tests {
             .table_name("user")
             .column_type("string")
             .if_not_exists();
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD IF NOT EXISTS email ON TABLE user TYPE string;");
     }
 
@@ -297,12 +296,12 @@ mod tests {
             Permission::Select("published=true OR user=$auth.id".into()),
             Permission::Update("user=$auth.id OR $auth.role=\"admin\"".into()),
         ];
-        
+
         let stmt = DefineFieldStatement::new()
             .name("email")
             .table_name("user")
             .permissions(permissions);
-        
+
         // This assertion should be updated based on your actual Permission formatting
         assert!(stmt.to_string().contains("DEFINE FIELD email ON TABLE user PERMISSIONS"));
         assert!(stmt.to_string().contains("FOR select"));
@@ -319,9 +318,9 @@ mod tests {
             .value("string::lowercase($value)")
             .readonly()
             .comment("User's email address");
-        
+
         assert_eq!(
-            stmt.to_string(), 
+            stmt.to_string(),
             "DEFINE FIELD email ON TABLE user TYPE string ASSERT string::is::email($value) VALUE string::lowercase($value) READONLY COMMENT \"User's email address\";"
         );
     }
@@ -332,7 +331,7 @@ mod tests {
             .name("id")
             .table_name("user")
             .column_type("string");
-        
+
         // Fields named "id" should be ignored
         assert_eq!(stmt.to_string(), "");
     }
@@ -341,7 +340,7 @@ mod tests {
     fn test_missing_table() {
         let stmt = DefineFieldStatement::new()
             .name("email");
-            
+
         assert!(stmt.build().is_err());
     }
 
@@ -352,7 +351,7 @@ mod tests {
             .table_name("user")
             .column_type("string")
             .null();
-        
+
         assert_eq!(stmt.to_string(), "DEFINE FIELD description ON TABLE user TYPE string|null ;");
     }
 }

@@ -5,13 +5,14 @@
 use std::fmt::Debug;
 use std::time::Duration;
 
-use crate::transaction::Transactional;
-use crate::{FromTarget, HasParams, RecordType, ReturnType, SelectStatement, SurrealId};
+use crate::{FromTarget, HasParams};
 use anyhow::{anyhow, Result};
+use magritte_core::transaction::Transactional;
+use magritte_core::{RecordType, ReturnType, SurrealId};
+use magritte_db::db;
 use serde::Serialize;
 use serde_json::Value;
-use tracing::{error, info, instrument};
-use magritte_db::{db, QueryType, SurrealDB};
+use tracing::instrument;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Content {
@@ -266,7 +267,7 @@ where
         Ok(query)
     }
 
-    pub async fn execute(self, ) -> Result<Vec<T>> {
+    pub async fn execute(self) -> Result<Vec<T>> {
         db().execute(self.build()?, self.parameters).await
     }
 }
