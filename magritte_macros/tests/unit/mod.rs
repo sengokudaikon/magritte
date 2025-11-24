@@ -32,11 +32,6 @@ pub struct Order {
     status: String,
 }
 
-impl HasId for Order {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
 impl Order {
     pub fn new(
         id: impl Into<SurrealId<Self>>,
@@ -93,12 +88,6 @@ pub struct Product {
     metadata: serde_json::Value,
 }
 
-impl HasId for Product {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
-
 impl Product {
     pub fn new(
         id: impl Into<SurrealId<Self>>,
@@ -132,12 +121,6 @@ pub struct User {
     email: String,
 }
 
-impl HasId for User {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
-
 impl User {
     pub fn new(
         id: impl Into<SurrealId<Self>>,
@@ -165,12 +148,6 @@ impl User {
 )]
 pub struct Posts {
     id: SurrealId<Self>,
-}
-
-impl HasId for Posts {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
 }
 
 impl Posts {

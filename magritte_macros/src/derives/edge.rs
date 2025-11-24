@@ -122,7 +122,6 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
         }
 
         #[automatically_derived]
-
         impl #impl_generics #crate_name::EdgeType for #ident #type_generics #where_clause {
             fn edge_from(&self) -> &str {
                 <#from_type as #crate_name::NamedType>::table_name()
@@ -134,6 +133,13 @@ pub fn expand_derive_edge(mut input: DeriveInput) -> syn::Result<TokenStream> {
 
             fn is_enforced(&self) -> bool {
                 #enforced
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics #crate_name::HasId for #ident #type_generics #where_clause {
+            fn id(&self) -> #crate_name::SurrealId<Self> {
+                self.id.clone()
             }
         }
 

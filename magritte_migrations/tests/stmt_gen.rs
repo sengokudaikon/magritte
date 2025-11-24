@@ -1,5 +1,7 @@
-#![feature(const_type_id)]
-use magritte::{table_snapshot, ColumnTrait, Event, HasId, Index, SchemaSnapshot, SurrealId, Table, TableRegistration, TableSnapshot, TableTrait};
+use magritte::{
+    table_snapshot, ColumnTrait, Event, HasId, Index, SchemaSnapshot, SurrealId, Table,
+    TableRegistration, TableSnapshot, TableTrait,
+};
 use magritte_migrations::manager::MigrationManager;
 use magritte_migrations::table::TableDiff;
 use magritte_migrations::test_models::{UserV1, UserV2};
@@ -175,25 +177,40 @@ async fn test_conditional_features() -> anyhow::Result<()> {
     let manager = MigrationManager::new(tempdir()?.path().into());
     // Get schema with all models
     let schema = manager.current_schema()?;
-    
+
     // Test OrderV1 (has indexes)
     let order_snap = schema.tables.get("orders").expect("Order table not found");
     assert!(!order_snap.indexes.is_empty(), "Order should have indexes");
     assert!(order_snap.events.is_empty(), "Order should not have events");
-    
+
     // Test ProductV1 (has events)
-    let product_snap = schema.tables.get("products").expect("Product table not found");
-    assert!(product_snap.indexes.is_empty(), "Product should not have indexes");
-    assert!(!product_snap.events.is_empty(), "Product should have events");
-    
+    let product_snap = schema
+        .tables
+        .get("products")
+        .expect("Product table not found");
+    assert!(
+        product_snap.indexes.is_empty(),
+        "Product should not have indexes"
+    );
+    assert!(
+        !product_snap.events.is_empty(),
+        "Product should have events"
+    );
+
     // Verify index content
     let order_indexes = order_snap.indexes.keys().collect::<Vec<_>>();
-    assert!(order_indexes.contains(&&"status_idx".to_string()), "Missing expected index");
-    
+    assert!(
+        order_indexes.contains(&&"status_idx".to_string()),
+        "Missing expected index"
+    );
+
     // Verify event content
     let product_events = product_snap.events.keys().collect::<Vec<_>>();
-    assert!(product_events.contains(&&"created".to_string()), "Missing expected event");
-    
+    assert!(
+        product_events.contains(&&"created".to_string()),
+        "Missing expected event"
+    );
+
     Ok(())
 }
 
@@ -207,21 +224,34 @@ async fn test_migration_with_features() -> anyhow::Result<()> {
         schema.add_table(table_snap);
         schema
     };
-    
+
     let statements = manager.diff(&old_schema, &new_schema)?;
-    
+
     // Verify that index and event statements are generated
     let statements_str = statements.join("\n");
     println!("{}", statements_str);
-    assert!(statements_str.contains("DEFINE TABLE"), "Should generate table statements");
-    assert!(statements_str.contains("DEFINE FIELD"), "Should generate field statements");
-    
+    assert!(
+        statements_str.contains("DEFINE TABLE"),
+        "Should generate table statements"
+    );
+    assert!(
+        statements_str.contains("DEFINE FIELD"),
+        "Should generate field statements"
+    );
+
     // Verify order of statements (tables should be defined before fields)
-    let table_pos = statements_str.find("DEFINE TABLE").expect("Should have table definition");
-    let field_pos = statements_str.find("DEFINE FIELD").expect("Should have field definition");
-    
-    assert!(table_pos < field_pos, "Tables should be defined before fields");
-    
+    let table_pos = statements_str
+        .find("DEFINE TABLE")
+        .expect("Should have table definition");
+    let field_pos = statements_str
+        .find("DEFINE FIELD")
+        .expect("Should have field definition");
+
+    assert!(
+        table_pos < field_pos,
+        "Tables should be defined before fields"
+    );
+
     Ok(())
 }
 
@@ -234,20 +264,10 @@ pub struct TestInventoryTable {
 }
 
 #[derive(strum::EnumIter, Serialize, Deserialize, Index)]
-pub enum TestInventoryTableIndexes {
-
-}
+pub enum TestInventoryTableIndexes {}
 
 #[derive(strum::EnumIter, Serialize, Deserialize, Event)]
-pub enum TestInventoryTableEvents {
-
-}
-
-impl HasId for TestInventoryTable {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
+pub enum TestInventoryTableEvents {}
 
 #[tokio::test]
 async fn test_inventory_collection() -> anyhow::Result<()> {

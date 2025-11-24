@@ -1,8 +1,8 @@
 use crate::{EdgeTrait, TableTrait};
 use anyhow::Result;
 use async_trait::async_trait;
-use magritte_query::types::RelationType;
-use magritte_query::{GraphTraversal, HasId, Query, RelateStatement, SelectStatement, SurrealId};
+use magritte_core::{HasId, RelationType, SurrealId};
+use magritte_query::{GraphTraversal, Query, RelateStatement, SelectStatement};
 use std::fmt::{Debug, Display};
 
 #[derive(Debug, Clone, Copy, PartialEq)]

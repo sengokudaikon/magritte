@@ -1,10 +1,9 @@
 use crate::entity::HasColumns;
 use crate::{ColumnTrait, EventTrait, HasEvents, HasIndexes, IndexTrait};
-use magritte_query::define_edge::DefineEdgeStatement;
-use magritte_query::types::{EdgeType, Permission, SchemaType, TableType};
+use magritte_core::{EdgeType, Permission, RecordRef, SchemaType, TableType};
+use magritte_query::DefineEdgeStatement;
 use std::fmt::{Debug, Display};
 use std::time::Duration;
-use magritte_query::RecordRef;
 
 /// Defines an Edge for a Table
 #[derive(Debug, Clone, PartialEq)]
@@ -47,13 +46,16 @@ pub trait EdgeTrait: EdgeType + HasColumns {
 
     fn events() -> Vec<impl EventTrait>
     where
-        Self: Sized,Self:HasEvents {
+        Self: Sized,
+        Self: HasEvents,
+    {
         <Self as HasEvents>::events()
     }
 
     fn indexes() -> Vec<impl IndexTrait>
     where
-        Self: Sized,Self:HasIndexes
+        Self: Sized,
+        Self: HasIndexes,
     {
         <Self as HasIndexes>::indexes()
     }
@@ -88,7 +90,12 @@ impl EdgeDef {
             from: from.into(),
             to: to.into(),
             as_select,
-            changefeed: changefeed.map(|c| (Duration::from_mins(c.0), c.1)),
+            changefeed: changefeed.map(|c| {
+                let seconds =
+                    c.0.checked_mul(60)
+                        .expect("changefeed duration overflow when converting minutes to seconds");
+                (Duration::from_secs(seconds), c.1)
+            }),
             overwrite,
             if_not_exists,
             drop,

@@ -5,7 +5,6 @@ use deluxe::ExtractAttributes;
 use macro_helpers::get_crate_name;
 use proc_macro2::TokenStream;
 use quote::quote;
-use std::time::Duration;
 use syn::{DeriveInput, Fields, FieldsNamed};
 
 pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
@@ -72,10 +71,7 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
 
     let changefeed = if let Some(duration) = &table_attr.changefeed {
         let duration: u64 = duration.parse().map_err(|e| {
-            syn::Error::new_spanned(
-                ident,
-                format!("Invalid changefeed duration value: {}", e),
-            )
+            syn::Error::new_spanned(ident, format!("Invalid changefeed duration value: {}", e))
         })?;
         let include_original = table_attr.include_original;
         quote!(Some((#duration, #include_original)))
@@ -181,6 +177,13 @@ pub fn expand_derive_table(input: DeriveInput) -> syn::Result<TokenStream> {
         impl #impl_generics #crate_name::TableTrait for #ident #type_generics #where_clause {
             fn def() -> #crate_name::TableDef {
                 #def
+            }
+        }
+
+        #[automatically_derived]
+        impl #impl_generics #crate_name::HasId for #ident #type_generics #where_clause {
+            fn id(&self) -> #crate_name::SurrealId<Self> {
+                self.id.clone()
             }
         }
 

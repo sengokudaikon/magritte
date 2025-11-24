@@ -1,6 +1,6 @@
 use anyhow::bail;
-use magritte_query::types::{EventType, TableType};
-use magritte_query::{DefineEventStatement, NamedType, RecordType};
+use magritte_core::{EventType, NamedType};
+use magritte_query::DefineEventStatement;
 use std::fmt::{Debug, Display};
 
 /// Defines an Event for a Table

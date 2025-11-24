@@ -1,7 +1,7 @@
 use anyhow::Result;
+use magritte_core::{HasId, RecordType, SurrealId};
 use magritte_query::{
-    DeleteStatement, HasId, InsertStatement, Query, RecordType, SelectStatement, SurrealId,
-    UpdateStatement, UpsertStatement,
+    DeleteStatement, InsertStatement, Query, SelectStatement, UpdateStatement, UpsertStatement,
 };
 use std::fmt::{Debug, Display};
 

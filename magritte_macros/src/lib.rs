@@ -175,13 +175,6 @@
 //! - Event and index configurations
 //! - Schema consistency
 //!
-//! # Experimental Features enabled in the crate
-//!
-//! #![feature(duration_constructors)] - necessary for Duration parsing from minutes. Might be removed in the future if we opt for seconds-based parsing.
-//! #![feature(const_type_id)] - TypeId::of is used in the proc macros to write definitions into a global registry.
-
-#![feature(duration_constructors)]
-#![feature(const_type_id)]
 #![allow(unused)]
 extern crate proc_macro;
 mod conversion;

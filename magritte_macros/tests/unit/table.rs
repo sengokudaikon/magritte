@@ -27,23 +27,12 @@ pub enum ActiveUsersIndexes {}
 #[derive(Event, Serialize, Deserialize, strum::EnumIter)]
 pub enum ActiveUsersEvents {}
 
-impl HasId for ActiveUsers {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
 // Test table with generics
 #[derive(Table, Serialize, Deserialize, Clone)]
 #[table(name = "generic_items")]
 pub struct GenericItem {
     id: SurrealId<Self>,
     data: RecordRef<Product>,
-}
-
-impl HasId for GenericItem {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
 }
 
 #[test]

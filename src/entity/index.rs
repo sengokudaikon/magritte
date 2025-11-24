@@ -1,5 +1,5 @@
-use magritte_query::types::IndexType;
-use magritte_query::{Define, DefineIndexStatement, IndexSpecifics, NamedType};
+use magritte_core::{IndexSpecifics, IndexType, NamedType};
+use magritte_query::{Define, DefineIndexStatement};
 use std::fmt::{Debug, Display};
 
 /// Defines an Index for a Table
@@ -96,8 +96,7 @@ impl IndexDef {
             return def;
         }
 
-        def = def.name(self.name.clone())
-            .table(self.table.clone());
+        def = def.name(self.name.clone()).table(self.table.clone());
 
         if self.overwrite {
             def = def.overwrite();

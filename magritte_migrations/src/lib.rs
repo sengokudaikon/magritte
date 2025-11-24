@@ -41,8 +41,6 @@
 //! While the crate handles edge table schemas, actual relation data migrations (`RELATE` statements)
 //! must be handled manually as they depend on application-specific record IDs.
 
-#![feature(const_type_id)]
-
 pub use error::Error;
 pub use error::Result;
 use magritte::Snapshot;
@@ -87,12 +85,12 @@ pub(crate) fn ensure_overwrite(stmt: &str) -> String {
 /// This trait is implemented by types that can compute the differences between
 /// two schema snapshots and generate the necessary SQL statements to migrate
 /// from one to the other.
-pub trait Diff<T>: Debug + Clone + Serialize + DeserializeOwned + Default where T: Snapshot {
+pub trait Diff<T>: Debug + Clone + Serialize + DeserializeOwned + Default
+where
+    T: Snapshot,
+{
     /// Creates a diff between two snapshots
-    fn from_snapshots(
-        old: &T,
-        new: &T,
-    ) -> crate::Result<Self>;
+    fn from_snapshots(old: &T, new: &T) -> crate::Result<Self>;
 
     /// Converts the diff back into a snapshot
     fn to_snapshot(&self) -> crate::Result<T>;
@@ -107,28 +105,33 @@ mod tests {
         let cases = vec![
             (
                 "DEFINE TABLE test TYPE NORMAL SCHEMAFULL",
-                "DEFINE TABLE OVERWRITE test TYPE NORMAL SCHEMAFULL"
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL SCHEMAFULL",
             ),
             (
                 "DEFINE FIELD title ON TABLE test TYPE string",
-                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string"
+                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string",
             ),
             (
                 "DEFINE TABLE IF NOT EXISTS test TYPE NORMAL",
-                "DEFINE TABLE OVERWRITE test TYPE NORMAL"
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL",
             ),
             (
                 "DEFINE TABLE OVERWRITE test TYPE NORMAL",
-                "DEFINE TABLE OVERWRITE test TYPE NORMAL"
+                "DEFINE TABLE OVERWRITE test TYPE NORMAL",
             ),
             (
                 "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string",
-                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string"
+                "DEFINE FIELD OVERWRITE title ON TABLE test TYPE string",
             ),
         ];
 
         for (input, expected) in cases {
-            assert_eq!(ensure_overwrite(input), expected, "Failed for input: {}", input);
+            assert_eq!(
+                ensure_overwrite(input),
+                expected,
+                "Failed for input: {}",
+                input
+            );
         }
     }
 }

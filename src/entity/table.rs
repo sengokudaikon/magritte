@@ -1,8 +1,9 @@
 use crate::entity::{HasColumns, HasEvents, HasIndexes, HasRelations};
 use crate::{ColumnTrait, EventTrait, IndexTrait, RelationTrait};
 use anyhow::anyhow;
+use magritte_core::{Permission, RecordRef, Relations, SchemaType, TableType};
 use magritte_query::define::define_table::DefineTableStatement;
-use magritte_query::{Define, Permission, RecordRef, Relations, SchemaType, TableType};
+use magritte_query::Define;
 use std::fmt::{Debug, Display};
 use std::time::Duration;
 
@@ -42,21 +43,24 @@ pub trait TableTrait: TableType + HasColumns {
 
     fn indexes() -> Vec<impl IndexTrait>
     where
-        Self: Sized, Self:HasIndexes
+        Self: Sized,
+        Self: HasIndexes,
     {
         <Self as HasIndexes>::indexes()
     }
 
     fn events() -> Vec<impl EventTrait>
     where
-        Self: Sized,Self:HasEvents
+        Self: Sized,
+        Self: HasEvents,
     {
         <Self as HasEvents>::events()
     }
 
     fn relations() -> Vec<impl Relations>
     where
-        Self: Sized,Self:HasRelations
+        Self: Sized,
+        Self: HasRelations,
     {
         <Self as HasRelations>::relations()
     }
@@ -102,7 +106,12 @@ impl TableDef {
                 .map(|pers| pers.iter().map(Permission::from).collect()),
             drop,
             as_select,
-            changefeed: changefeed.map(|c| (Duration::from_mins(c.0), c.1)),
+            changefeed: changefeed.map(|c| {
+                let seconds =
+                    c.0.checked_mul(60)
+                        .expect("changefeed duration overflow when converting minutes to seconds");
+                (Duration::from_secs(seconds), c.1)
+            }),
             comment,
         }
     }

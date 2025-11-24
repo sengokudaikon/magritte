@@ -1,16 +1,15 @@
 use inventory::collect;
+use magritte_core::{EventType, HasId, IndexType, RecordType, RelationType, Relations, SurrealId};
 use magritte_macros::{Edge, Event, Index, Relation, Table};
-use magritte_query::types::{EventType, IndexType, RelationType};
-use magritte_query::{HasId, RecordType, Relations, SurrealId};
 use serde::{Deserialize, Serialize};
 
+pub mod cache;
 pub mod column;
 pub mod edge;
 pub mod event;
 pub mod index;
 pub mod relation;
 pub mod table;
-pub mod cache;
 
 pub use relation::{LoadStrategy, RelationDef, RelationTrait};
 
@@ -21,7 +20,6 @@ pub trait HasColumns {
 }
 
 pub trait HasEvents {
-
     fn events() -> Vec<impl EventTrait>;
     fn event_defs() -> Vec<EventDef>;
 }
@@ -31,7 +29,6 @@ pub trait HasIndexes {
     fn index_defs() -> Vec<IndexDef>;
 }
 pub trait HasRelations {
-
     fn relations() -> Vec<impl Relations>;
     fn relation_defs() -> Vec<RelationDef>;
 }

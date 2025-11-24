@@ -10,11 +10,6 @@ pub struct UserV1 {
     #[column(type = "number")]
     age: i32,
 }
-impl HasId for UserV1 {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
 
 #[derive(Index, Serialize, Deserialize, strum::EnumIter)]
 pub enum UserV1Indexes {
@@ -36,11 +31,6 @@ pub struct UserV2 {
     age: i32,
     #[column(type = "string")]
     email: String,
-}
-impl HasId for UserV2 {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
 }
 
 #[derive(Index, Serialize, Deserialize, strum::EnumIter)]
@@ -68,12 +58,6 @@ pub struct ProductV1 {
     #[column(type = "any")]
     metadata: serde_json::Value,
     status: String
-}
-
-impl HasId for ProductV1 {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
 }
 
 #[derive(Event, Serialize, Deserialize, strum::EnumIter)]
@@ -114,12 +98,6 @@ pub struct OrderV1 {
     status: String,
     #[column(type="record<products>")]
     product: RecordRef<ProductV1>
-}
-
-impl HasId for OrderV1 {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
 }
 
 #[derive(Index, Serialize, Deserialize, strum::EnumIter)]

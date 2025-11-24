@@ -18,12 +18,6 @@ pub struct OrderProduct {
     quantity: String,
 }
 
-impl HasId for OrderProduct {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
-}
-
 // Test edge between User and Order
 #[derive(Edge, Serialize, Deserialize, Clone)]
 #[edge(from = User, to = Order, if_not_exists)]
@@ -34,12 +28,6 @@ pub struct UserOrder {
 
     #[column(type = "string")]
     note: String,
-}
-
-impl HasId for UserOrder {
-    fn id(&self) -> SurrealId<Self> {
-        self.id.clone()
-    }
 }
 
 #[test]

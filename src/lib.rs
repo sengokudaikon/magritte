@@ -1,6 +1,3 @@
-#![feature(duration_constructors)]
-#![feature(associated_type_defaults)]
-#![feature(const_type_id)]
 #![allow(unused)]
 #![allow(clippy::wrong_self_convention)]
 //! Magritte - A powerful QueryBuilder for SurrealDB
@@ -14,11 +11,11 @@ pub mod entity;
 pub mod entity_crud;
 pub mod snapshot;
 
+use cfg_if::cfg_if;
 pub use entity::relation::LoadStrategy;
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use std::collections::HashMap;
-use cfg_if::cfg_if;
 use thiserror::Error;
 
 /// Error type for magritte operations
@@ -103,14 +100,17 @@ pub use entity::HasColumns;
 pub use entity::HasEvents;
 pub use entity::HasIndexes;
 pub use entity::HasRelations;
+pub use magritte_core::{
+    ColumnType, ColumnTypeLite, EdgeType, EventType, FieldType, HasId, IndexSpecifics, IndexType,
+    NamedType, Permission, Record, RecordRef, RecordType, RelationType, Relations, SchemaType,
+    SurrealId, TableType, VectorCondition, VectorDistance, VectorType,
+};
 pub use magritte_macros::EnumIter;
 pub use magritte_macros::*;
 pub use magritte_macros::{Column, Edge, Event, Index, Relation, Table};
-pub use magritte_query::types::{EventType, IndexType, RelationType};
 pub use magritte_query::*;
 pub use strum;
 pub use surrealdb::RecordId;
-pub use RecordType;
 #[derive(Clone)]
 pub struct TableRegistration {
     pub builder: fn() -> anyhow::Result<TableSnapshot>,
@@ -167,5 +167,5 @@ inventory::collect!(IndexRegistration);
 
 use crate::entity_crud::SurrealCrud;
 
-#[cfg(feature = "uuid")]
-pub use magritte_query::uuid::*;
+#[cfg(feature = "with-uuid")]
+pub use uuid::{Uuid, Version};
