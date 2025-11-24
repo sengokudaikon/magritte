@@ -2,6 +2,10 @@
 name = "macro_helpers"
 version = "0.1.0"
 edition = "2021"
+description = "Helper utilities for magritte macros"
+authors = ["Daniil Zavrin <hanamik0@proton.me>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/sengokudaikon/magritte"
 
 [dependencies]
 proc-macro2 = "1.0.92"

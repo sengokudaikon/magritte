@@ -1,7 +1,7 @@
 use heck::ToSnakeCase;
 use std::fmt::Display;
 use syn::{DataEnum, Fields, Lit, Type, TypeArray, TypePath};
-use magritte_core::FieldType;
+use magritte_core::{FieldType, Literal};
 
 fn handle_set_type(args: &syn::PathArguments) -> FieldType {
     if let syn::PathArguments::AngleBracketed(args) = args {
